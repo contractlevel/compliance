@@ -114,7 +114,7 @@ This project uses a `TransparentUpgradeableProxy` (`CompliantProxy`) to store Ch
 
 ## Additional Comments
 
-This project uses a [forked version of the EverestConsumer](https://github.com/palmcivet7/everest-chainlink-consumer) with updated Chainlink function names, gas optimizations and mislabelling fix in the `IEverestConsumer` interface that would've returned the incorrect compliant status.
+This project uses a [community fork of the EverestConsumer](https://github.com/palmcivet7/everest-chainlink-consumer) with updated Chainlink function names, gas optimizations and mislabelling fix in the `IEverestConsumer` interface that would've returned the incorrect compliant status.
 
 A `pendingRequest` in the context of this system refers to requests that are pending automation. This name needs to be reviewed for clarity/confusion reasons as requests that are not pending automation are not set to true in this mapping.
 
