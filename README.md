@@ -74,6 +74,8 @@ This fee is only charged if the request specifies the use of Automation followin
 
 ## Testing
 
+Run `forge install` to install dependencies.
+
 See coverage with `forge coverage` and `forge coverage --report debug`.
 
 The `cannotExecute` modifier on `checkLog()` will have to be commented out for some of the tests in `CheckLog.t.sol` to pass. This will also require the `test_compliant_checkLog_revertsWhen_called` test to be commented out too. The reason for this is that `checkLog()` is only intended to be simulated offchain by Chainlink Automation nodes, and not actually called onchain.
