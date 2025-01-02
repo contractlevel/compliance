@@ -2,5 +2,5 @@
 pragma solidity 0.8.24;
 
 interface ICompliantLogic {
-    function compliantLogic(bytes calldata data) external;
+    function compliantLogic(address user, bytes calldata data) external;
 }
