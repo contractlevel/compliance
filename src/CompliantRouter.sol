@@ -33,6 +33,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__OnlyForwarder();
     error CompliantRouter__RequestNotMadeByThisContract();
     error CompliantRouter__NotCompliantLogic(address invalidContract);
+    error CompliantRouter__LinkTransferFailed();
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
@@ -283,36 +284,24 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @dev calculates fees in LINK and handles approvals
-    /// @param isAutomated Whether to include automation fees
     /// @param isOnTokenTransfer if the tx was initiated by erc677 onTokenTransfer, we don't need to transferFrom(msg.sender)
-    function _handleFees(bool isAutomated, bool isOnTokenTransfer) internal returns (uint256) {
+    function _handleFees(bool isOnTokenTransfer) internal returns (uint256) {
         uint256 compliantFeeInLink = _calculateCompliantFee();
         uint256 everestFeeInLink = _getEverestFee();
+        uint256 automationFeeInLink = _getAutomationFee();
 
         s_compliantFeesInLink += compliantFeeInLink;
 
-        uint256 totalFee = compliantFeeInLink + everestFeeInLink;
-
-        IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
-
-        uint96 automationFeeInLink = registry.getMinBalance(i_upkeepId);
-
-        if (isAutomated) {
-            totalFee += automationFeeInLink;
-
-            i_link.approve(address(registry), automationFeeInLink);
-        }
+        uint256 totalFee = compliantFeeInLink + everestFeeInLink + automationFeeInLink;
 
         if (!isOnTokenTransfer) {
             if (!i_link.transferFrom(msg.sender, address(this), totalFee)) {
-                revert CompliantRouter__InsufficientLinkTransferAmount(totalFee);
+                revert CompliantRouter__LinkTransferFailed();
             }
         }
 
-        if (isAutomated) {
-            registry.addFunds(i_upkeepId, automationFeeInLink);
-        }
-
+        i_link.approve(address(registry), automationFeeInLink);
+        registry.addFunds(i_upkeepId, automationFeeInLink);
         i_link.approve(address(i_everest), everestFeeInLink);
 
         return totalFee;
@@ -352,6 +341,12 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return i_everest.oraclePayment();
     }
 
+    /// @dev returns fee in LINK for Chainlink Automation
+    function _getAutomationFee() internal view returns (uint256) {
+        IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
+        return uint256(registry.getMinBalance(i_upkeepId));
+    }
+
     /// @notice Checks if a contract implements the ICompliantLogic interface
     /// @param target The address of the target contract
     /// @return True if the contract supports the ICompliantLogic interface
@@ -377,21 +372,14 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function getFee() public view returns (uint256) {
         uint256 compliantFeeInLink = _calculateCompliantFee();
         uint256 everestFeeInLink = _getEverestFee();
+        uint256 automationFeeInLink = _getAutomationFee();
 
-        return compliantFeeInLink + everestFeeInLink;
+        return compliantFeeInLink + everestFeeInLink + automationFeeInLink;
     }
 
-    /// @notice returns the amount that gets taken by the protocol without the everest request fee
+    /// @notice returns the amount that gets taken by the protocol without the everest and automation fees
     function getCompliantFee() external view returns (uint256) {
         return _calculateCompliantFee();
-    }
-
-    /// @notice returns the fee for a KYC request with subsequent automated logic
-    function getFeeWithAutomation() external view returns (uint256) {
-        IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
-        uint96 automationFeeInLink = registry.getMinBalance(i_upkeepId);
-
-        return getFee() + automationFeeInLink;
     }
 
     /// @notice returns the protocol fees available to withdraw by admin
