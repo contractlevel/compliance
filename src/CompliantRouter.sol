@@ -75,12 +75,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev maps a requestId to a PendingRequest struct
     mapping(bytes32 requestId => PendingRequest) internal s_pendingRequests;
 
-    /// @notice These two values are included for demo purposes
-    /// @dev This can only be incremented by users who have completed KYC
-    uint256 internal s_incrementedValue;
-    /// @dev this can only be incremented by performUpkeep if a requested user is compliant
-    uint256 internal s_automatedIncrement;
-
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -88,10 +82,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev emitted when KYC status of an address is requested
     event CompliantStatusRequested(bytes32 indexed everestRequestId, address indexed user, address indexed logic);
     /// @dev emitted when KYC status of an address is fulfilled
-    event CompliantStatusFulfilled(bytes32 indexed everestRequestId, address indexed user, bool indexed isCompliant);
-
-    /// @notice included for demo purposes
-    event CompliantCheckPassed();
+    event CompliantStatusFulfilled(
+        bytes32 indexed everestRequestId, address indexed user, address indexed logic, bool isCompliant
+    );
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -146,6 +139,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         (address user, address logic) = abi.decode(data, (address, address));
 
+        // review can we change returning the fees from _handleFees to calling getFee()?
+        // we would only want to make the call to getFee once, then perhaps pass to _handleFees()
+        // but we need to account for compliantFees separately, and dont want to do those external calls twice
+        // uint256 fee = 1;
         uint256 fees = _handleFees(true); // true for isOnTokenTransfer
         if (amount < fees) {
             revert CompliantRouter__InsufficientLinkTransferAmount(fees);
@@ -162,16 +159,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 fee = _handleFees(false); // false for isOnTokenTransfer
         _requestKycStatus(user, logic);
         return fee;
-    }
-
-    // review this can be removed
-    /// @notice example function that can only be called by a compliant user
-    function doSomething() external onlyProxy {
-        _revertIfNonCompliant(msg.sender);
-
-        // compliant-restricted logic goes here
-        s_incrementedValue++;
-        emit CompliantCheckPassed();
     }
 
     /// @dev continuously simulated by Chainlink offchain Automation nodes
@@ -233,17 +220,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         s_pendingRequests[requestId].isPending = false;
 
-        // review event params, possibly replace requestId with logic
-        emit CompliantStatusFulfilled(requestId, user, isCompliant);
+        emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
-        // review do we want to pass the isCompliant bool along with the user instead of this approach?
-        if (isCompliant) {
-            s_automatedIncrement++;
-            emit CompliantCheckPassed();
-
-            // review compliantLogic() function name could  be something else... handleRequestedUser() ?
-            ICompliantLogic(logic).compliantLogic(user, isCompliant);
-        }
+        ICompliantLogic(logic).compliantLogic(user, isCompliant);
     }
 
     /// @dev admin function for withdrawing protocol fees
@@ -414,16 +393,5 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     function getPendingRequest(bytes32 requestId) external view returns (PendingRequest memory) {
         return s_pendingRequests[requestId];
-    }
-
-    // review will want to remove these incremented demo values (move them to a CompliantLogic wrapper/harness)
-    /// @notice getter for example value
-    function getIncrementedValue() external view returns (uint256) {
-        return s_incrementedValue;
-    }
-
-    /// @notice getter for example value
-    function getAutomatedIncrement() external view returns (uint256) {
-        return s_automatedIncrement;
     }
 }
