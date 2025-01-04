@@ -235,10 +235,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         emit CompliantStatusFulfilled(requestId, user, isCompliant);
 
         if (isCompliant) {
-            _executeCompliantLogic(user, logic);
-
             s_automatedIncrement++;
             emit CompliantCheckPassed();
+
+            ICompliantLogic(logic).compliantLogic(user);
         }
     }
 
@@ -305,13 +305,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         i_link.approve(address(i_everest), everestFeeInLink);
 
         return totalFee;
-    }
-
-    /// @notice calls compliantLogic on a target contract that has implemented CompliantLogic
-    /// @param user The user address
-    /// @param logic The address of the CompliantLogic contract
-    function _executeCompliantLogic(address user, address logic) internal virtual {
-        ICompliantLogic(logic).compliantLogic(user);
     }
 
     /// @dev reverts if the user is not compliant
