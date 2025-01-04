@@ -14,9 +14,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {ICompliantLogic} from "./interfaces/ICompliantLogic.sol";
+import {ICompliantRouter} from "./interfaces/ICompliantRouter.sol";
 
 /// @notice A template contract for requesting and getting the KYC compliant status of an address.
-contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, IERC677Receiver {
+contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, IERC677Receiver, ICompliantRouter {
     /*//////////////////////////////////////////////////////////////
                            TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
@@ -34,14 +35,17 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__RequestNotMadeByThisContract();
     error CompliantRouter__NotCompliantLogic(address invalidContract);
     error CompliantRouter__LinkTransferFailed();
+    error CompliantRouter__InvalidUser();
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @notice this struct is only used for requests that are pending Chainlink Automation
+    /// @param user who's compliant status is being requested
     /// @param logic the CompliantLogic contract implemented and passed by the requester
     /// @param isPending if this is true and a Fulfilled event is emitted by Everest, Chainlink Automation will perform
     struct PendingRequest {
+        address user;
         address logic;
         bool isPending;
     }
@@ -68,8 +72,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @dev tracks the accumulated fees for this contract in LINK
     uint256 internal s_compliantFeesInLink;
-    /// @dev maps a user to a PendingRequest struct if the request requires Automation
-    mapping(address user => PendingRequest) internal s_pendingRequests;
+    /// @dev maps a requestId to a PendingRequest struct
+    mapping(bytes32 requestId => PendingRequest) internal s_pendingRequests;
 
     /// @notice These two values are included for demo purposes
     /// @dev This can only be incremented by users who have completed KYC
@@ -80,8 +84,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
+    // review order of user and logic
     /// @dev emitted when KYC status of an address is requested
-    event CompliantStatusRequested(bytes32 indexed everestRequestId, address indexed user);
+    event CompliantStatusRequested(bytes32 indexed everestRequestId, address indexed user, address indexed logic);
     /// @dev emitted when KYC status of an address is fulfilled
     event CompliantStatusFulfilled(bytes32 indexed everestRequestId, address indexed user, bool indexed isCompliant);
 
@@ -141,10 +146,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         (address user, address logic) = abi.decode(data, (address, address));
 
-        // review this
-        bool isAutomated = logic != address(0);
-
-        uint256 fees = _handleFees(isAutomated, true);
+        uint256 fees = _handleFees(true); // true for isOnTokenTransfer
         if (amount < fees) {
             revert CompliantRouter__InsufficientLinkTransferAmount(fees);
         }
@@ -155,12 +157,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @notice anyone can call this function to request the KYC status of their address
     /// @notice msg.sender must approve address(this) on LINK token contract
     /// @param user address to request kyc status of
-    /// @param isAutomated true if using automation to execute logic based on fulfilled request
+    /// @param logic CompliantLogic contract to call when request is fulfilled
     function requestKycStatus(address user, address logic) external onlyProxy returns (uint256) {
-        // review this
-        bool isAutomated = logic != address(0);
-
-        uint256 fee = _handleFees(isAutomated, false);
+        uint256 fee = _handleFees(false); // false for isOnTokenTransfer
         _requestKycStatus(user, logic);
         return fee;
     }
@@ -177,7 +176,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @dev continuously simulated by Chainlink offchain Automation nodes
     /// @param log ILogAutomation.Log
-    /// @return upkeepNeeded evaluates to true if the Fulfilled log contains a pending requested address
+    /// @return upkeepNeeded evaluates to true if the Fulfilled log contains a pending request
     /// @return performData contains fulfilled pending requestId, requestedAddress and if they are compliant
     /// @notice for some unit tests to run successfully `cannotExecute` modifier should be commented out
     function checkLog(Log calldata log, bytes memory)
@@ -198,7 +197,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                 revert CompliantRouter__RequestNotMadeByThisContract();
             }
 
-            (address requestedAddress, IEverestConsumer.Status kycStatus,) =
+            (address user, IEverestConsumer.Status kycStatus,) =
                 abi.decode(log.data, (address, IEverestConsumer.Status, uint40));
 
             bool isCompliant;
@@ -206,14 +205,17 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                 isCompliant = true;
             }
 
-            PendingRequest memory request = s_pendingRequests[requestedAddress];
+            PendingRequest memory request = s_pendingRequests[requestId];
 
             /// @dev revert if request's logic contract does not implement ICompliantLogic interface
             address logic = request.logic;
-            if (!isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
+            if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
+
+            /// @dev revert if the user emitted by the Everest.Fulfill log is not the same as the one stored in request
+            if (user != request.user) revert CompliantRouter__InvalidUser();
 
             if (request.isPending) {
-                performData = abi.encode(requestId, requestedAddress, logic, isCompliant);
+                performData = abi.encode(requestId, user, logic, isCompliant);
                 upkeepNeeded = true;
             }
         }
@@ -229,16 +231,18 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         (bytes32 requestId, address user, address logic, bool isCompliant) =
             abi.decode(performData, (bytes32, address, address, bool));
 
-        s_pendingRequests[user].isPending = false;
+        s_pendingRequests[requestId].isPending = false;
 
         // review event params, possibly replace requestId with logic
         emit CompliantStatusFulfilled(requestId, user, isCompliant);
 
+        // review do we want to pass the isCompliant bool along with the user instead of this approach?
         if (isCompliant) {
             s_automatedIncrement++;
             emit CompliantCheckPassed();
 
-            ICompliantLogic(logic).compliantLogic(user);
+            // review compliantLogic() function name could  be something else... handleRequestedUser() ?
+            ICompliantLogic(logic).compliantLogic(user, isCompliant);
         }
     }
 
@@ -261,23 +265,26 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @dev requests the kyc status of the user
+    /// @param user who's status to request
+    /// @param logic CompliantLogic contract to call when request is fulfilled
     function _requestKycStatus(address user, address logic) internal {
-        // _setPendingRequest(user, logic);
-
         i_everest.requestStatus(user);
 
-        // review do we really need this
-        // yes we should be using it to map to pendingRequest for when different logics request the same user
         bytes32 requestId = i_everest.getLatestSentRequestId();
 
         _setPendingRequest(requestId, user, logic);
 
         emit CompliantStatusRequested(requestId, user, logic);
+
+        // review do we want to return requestId? we'd return it in external requestKycStatus()
+        // but what about onTokenTransfer?
     }
 
     /// @dev Chainlink Automation will only trigger for a true pending request
+    /// @param requestId unique identifier for request returned from everest chainlink client
+    /// @param user who's status to request
+    /// @param logic CompliantLogic contract to call when request is fulfilled
     function _setPendingRequest(bytes32 requestId, address user, address logic) internal {
-        // review do we need to revert if already isPending? probably not
         s_pendingRequests[requestId].user = user;
         s_pendingRequests[requestId].logic = logic;
         s_pendingRequests[requestId].isPending = true;
@@ -288,7 +295,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function _handleFees(bool isOnTokenTransfer) internal returns (uint256) {
         uint256 compliantFeeInLink = _calculateCompliantFee();
         uint256 everestFeeInLink = _getEverestFee();
-        uint256 automationFeeInLink = _getAutomationFee();
+        uint96 automationFeeInLink = _getAutomationFee();
 
         s_compliantFeesInLink += compliantFeeInLink;
 
@@ -300,6 +307,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             }
         }
 
+        IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
         i_link.approve(address(registry), automationFeeInLink);
         registry.addFunds(i_upkeepId, automationFeeInLink);
         i_link.approve(address(i_everest), everestFeeInLink);
@@ -335,9 +343,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @dev returns fee in LINK for Chainlink Automation
-    function _getAutomationFee() internal view returns (uint256) {
+    function _getAutomationFee() internal view returns (uint96) {
         IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
-        return uint256(registry.getMinBalance(i_upkeepId));
+        return registry.getMinBalance(i_upkeepId);
     }
 
     /// @notice Checks if a contract implements the ICompliantLogic interface
@@ -404,10 +412,11 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return i_proxy;
     }
 
-    function getPendingRequest(address user) external view returns (PendingRequest memory) {
-        return s_pendingRequests[user];
+    function getPendingRequest(bytes32 requestId) external view returns (PendingRequest memory) {
+        return s_pendingRequests[requestId];
     }
 
+    // review will want to remove these incremented demo values (move them to a CompliantLogic wrapper/harness)
     /// @notice getter for example value
     function getIncrementedValue() external view returns (uint256) {
         return s_incrementedValue;

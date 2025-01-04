@@ -18,6 +18,11 @@ abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     address internal immutable i_compliantRouter;
 
     /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+    event NonCompliantUser(address nonCompliantUser);
+
+    /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
     /// @param compliantRouter CompliantRouter contract address
@@ -37,15 +42,16 @@ abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     }
 
     /// @param user compliant status requestee
-    /// @param data arbitrary data to pass to restricted logic
-    function compliantLogic(address user, bytes calldata data) external {
+    /// @param isCompliant true if user has completed KYC with regulated entity
+    function compliantLogic(address user, bool isCompliant) external {
         if (msg.sender != i_compliantRouter) revert CompliantLogic__OnlyCompliantRouter();
-        _compliantLogic(user, data);
+        if (isCompliant) _compliantLogic(user);
+        else emit NonCompliantUser(user);
     }
 
     /*//////////////////////////////////////////////////////////////
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @notice override this function in your implementation
-    function _compliantLogic(address user, bytes calldata data) internal virtual;
+    function _compliantLogic(address user) internal virtual;
 }
