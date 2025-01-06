@@ -40,6 +40,7 @@ contract BaseTest is Test {
     address internal user = makeAddr("user");
     address internal proxyDeployer = makeAddr("proxyDeployer");
     address internal owner;
+    address internal logic = makeAddr("logic");
 
     uint256 internal ethMainnetFork;
 
@@ -115,7 +116,7 @@ contract BaseTest is Test {
     }
 
     /// @dev set the user to pending request
-    function _setUserPendingRequest(address logic) internal {
+    function _setUserPendingRequest() internal {
         uint256 amount = compliantRouter.getFee();
         bytes memory data = abi.encode(user, logic);
         vm.prank(user);

@@ -6,12 +6,11 @@ import {MockLinkToken} from "../mocks/MockLinkToken.sol";
 import {LibZip} from "@solady/src/utils/LibZip.sol";
 
 contract OnTokenTransferTest is BaseTest {
-    function test_compliant_onTokenTransfer_noAutomation() public {
+    function test_compliant_onTokenTransfer_success() public {
         uint256 amount = compliantRouter.getFee();
-        /// @dev requesting the kyc status of user
-        /// @dev false because we are not performing automation
-        /// @dev "" for no compliantCalldata because we are not automating anything to pass it to
-        bytes memory data = abi.encode(user, false, "");
+
+        /// @dev requesting the kyc status of user and passing the logic address for callback
+        bytes memory data = abi.encode(user, logic);
 
         vm.recordLogs();
 
@@ -19,51 +18,23 @@ contract OnTokenTransferTest is BaseTest {
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 eventSignature = keccak256("KYCStatusRequested(bytes32,address)");
+        bytes32 eventSignature = keccak256("CompliantStatusRequested(bytes32,address,address)");
         bytes32 emittedRequestId;
         address emittedUser;
+        address emittedLogic;
 
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].topics[0] == eventSignature) {
                 emittedRequestId = logs[i].topics[1];
                 emittedUser = address(uint160(uint256(logs[i].topics[2])));
-            }
-        }
-
-        bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
-
-        assertEq(emittedRequestId, expectedRequestId);
-        assertEq(user, emittedUser);
-    }
-
-    function test_compliant_onTokenTransfer_automation() public {
-        uint256 amount = compliantRouter.getFee();
-        bytes memory compliantCalldata = abi.encode(1);
-        /// @dev requesting the kyc status of user
-        /// @dev true because we are performing automation
-        bytes memory data = abi.encode(user, true, compliantCalldata);
-
-        vm.recordLogs();
-
-        vm.prank(user);
-        LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 eventSignature = keccak256("KYCStatusRequested(bytes32,address)");
-        bytes32 emittedRequestId;
-        address emittedUser;
-
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == eventSignature) {
-                emittedRequestId = logs[i].topics[1];
-                emittedUser = address(uint160(uint256(logs[i].topics[2])));
+                emittedLogic = address(uint160(uint256(logs[i].topics[3])));
             }
         }
 
         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
 
         (, bytes memory retData) =
-            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", emittedRequestId));
 
         CompliantRouter.PendingRequest memory pendingRequest = abi.decode(retData, (CompliantRouter.PendingRequest));
         bool isPending = pendingRequest.isPending;
@@ -71,6 +42,9 @@ contract OnTokenTransferTest is BaseTest {
         assertTrue(isPending);
         assertEq(emittedRequestId, expectedRequestId);
         assertEq(user, emittedUser);
+        assertEq(logic, emittedLogic);
+        assertEq(logic, pendingRequest.logic);
+        assertEq(user, pendingRequest.user);
     }
 
     function test_compliant_onTokenTransfer_revertsWhen_notLink() public {
@@ -81,7 +55,7 @@ contract OnTokenTransferTest is BaseTest {
         uint256 amount = compliantRouter.getFee();
         bytes memory data = abi.encode(user, false);
 
-        vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyLinkToken()"));
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyLinkToken()"));
         erc677.transferAndCall(address(compliantProxy), amount, data);
         vm.stopPrank();
     }
@@ -105,7 +79,7 @@ contract OnTokenTransferTest is BaseTest {
         bytes memory data = abi.encode(user, true, compliantCalldata);
 
         vm.prank(user);
-        vm.expectRevert(); // abi.encodeWithSignature("Compliant__OnlyProxy()")
+        vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__OnlyProxy()")
         LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
     }
 }
