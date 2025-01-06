@@ -10,7 +10,7 @@ contract OnTokenTransferTest is BaseTest {
         uint256 amount = compliantRouter.getFee();
 
         /// @dev requesting the kyc status of user and passing the logic address for callback
-        bytes memory data = abi.encode(user, logic);
+        bytes memory data = abi.encode(user, address(logic));
 
         vm.recordLogs();
 
@@ -42,8 +42,8 @@ contract OnTokenTransferTest is BaseTest {
         assertTrue(isPending);
         assertEq(emittedRequestId, expectedRequestId);
         assertEq(user, emittedUser);
-        assertEq(logic, emittedLogic);
-        assertEq(logic, pendingRequest.logic);
+        assertEq(address(logic), emittedLogic);
+        assertEq(address(logic), pendingRequest.logic);
         assertEq(user, pendingRequest.user);
     }
 
@@ -66,20 +66,28 @@ contract OnTokenTransferTest is BaseTest {
         uint256 amount = fee - 1;
         bytes memory data = abi.encode(user, false, "");
 
-        vm.expectRevert(); // abi.encodeWithSignature("Compliant__InsufficientLinkTransferAmount(uint256,uint256)", amount, fee)
+        // abi.encodeWithSignature("CompliantRouter__InsufficientLinkTransferAmount(uint256,uint256)", amount, fee)
+        vm.expectRevert();
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
         vm.stopPrank();
     }
 
     function test_compliant_onTokenTransfer_revertsWhen_notProxy() public {
         uint256 amount = compliantRouter.getFee();
-        bytes memory compliantCalldata = abi.encode(1);
-        /// @dev requesting the kyc status of user
-        /// @dev true because we are performing automation
-        bytes memory data = abi.encode(user, true, compliantCalldata);
+        bytes memory data = abi.encode(user, address(logic));
 
         vm.prank(user);
         vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__OnlyProxy()")
+        LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
+    }
+
+    function test_compliant_onTokenTransfer_revertsWhen_logicIncompatible() public {
+        uint256 amount = compliantRouter.getFee();
+        address nonLogic = makeAddr("nonLogic");
+        bytes memory data = abi.encode(user, nonLogic);
+
+        vm.prank(user);
+        vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)")
         LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
     }
 }

@@ -18,6 +18,7 @@ import {
     ITransparentUpgradeableProxy,
     ProxyAdmin
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {LogicWrapper} from "./wrappers/LogicWrapper.sol";
 
 contract BaseTest is Test {
     /*//////////////////////////////////////////////////////////////
@@ -40,7 +41,7 @@ contract BaseTest is Test {
     address internal user = makeAddr("user");
     address internal proxyDeployer = makeAddr("proxyDeployer");
     address internal owner;
-    address internal logic = makeAddr("logic");
+    LogicWrapper internal logic;
 
     uint256 internal ethMainnetFork;
 
@@ -100,6 +101,9 @@ contract BaseTest is Test {
 
         /// @dev deal LINK to user
         deal(link, user, USER_LINK_BALANCE);
+
+        /// @dev deploy CompliantLogic implementation
+        logic = new LogicWrapper(address(compliantProxy));
     }
 
     /// @notice Empty test function to ignore file in coverage report
@@ -118,13 +122,13 @@ contract BaseTest is Test {
     /// @dev set the user to pending request
     function _setUserPendingRequest() internal {
         uint256 amount = compliantRouter.getFee();
-        bytes memory data = abi.encode(user, logic);
+        bytes memory data = abi.encode(user, address(logic));
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 
         // will probably need a function like Everest's getLatestRequestId()
-
-        bytes32 requestId;
+        // bytes32 requestId;
+        bytes32 requestId = bytes32(uint256(uint160(user)));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));

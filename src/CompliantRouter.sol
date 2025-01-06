@@ -36,6 +36,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__NotCompliantLogic(address invalidContract);
     error CompliantRouter__LinkTransferFailed();
     error CompliantRouter__InvalidUser();
+    error CompliantRouter__RequestNotPending();
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
@@ -83,6 +84,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev emitted when KYC status of an address is fulfilled
     event CompliantStatusFulfilled(
         bytes32 indexed everestRequestId, address indexed user, address indexed logic, bool isCompliant
+    );
+    /// @dev emitted when callback to CompliantLogic fails
+    event CompliantLogicExecutionFailed(
+        bytes32 indexed requestId, address indexed user, address indexed logic, bool isCompliant, bytes err
     );
 
     /*//////////////////////////////////////////////////////////////
@@ -136,6 +141,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         (address user, address logic) = abi.decode(data, (address, address));
 
+        _revertIfNotCompliantLogic(logic);
+
         // review can we change returning the fees from _handleFees to calling getFee()?
         // we would only want to make the call to getFee once, then perhaps pass to _handleFees()
         // but we need to account for compliantFees separately, and dont want to do those external calls twice
@@ -154,6 +161,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @param user address to request kyc status of
     /// @param logic CompliantLogic contract to call when request is fulfilled
     function requestKycStatus(address user, address logic) external onlyProxy returns (uint256) {
+        _revertIfNotCompliantLogic(logic);
+
         uint256 fee = _handleFees(false); // false for isOnTokenTransfer
         _requestKycStatus(user, logic);
         return fee;
@@ -167,7 +176,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        cannotExecute
+        // cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
@@ -193,11 +202,16 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             PendingRequest memory request = s_pendingRequests[requestId];
 
             /// @dev revert if request's logic contract does not implement ICompliantLogic interface
+            /// @notice this check is a bit redundant because we already do it, but checkLog costs no gas so may as well
             address logic = request.logic;
-            if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
+            _revertIfNotCompliantLogic(logic);
 
             /// @dev revert if the user emitted by the Everest.Fulfill log is not the same as the one stored in request
+            // review how redundant is this? can we even reach this check in unit tests?
             if (user != request.user) revert CompliantRouter__InvalidUser();
+
+            /// @dev revert if request is not pending
+            if (!request.isPending) revert CompliantRouter__RequestNotPending();
 
             if (request.isPending) {
                 performData = abi.encode(requestId, user, logic, isCompliant);
@@ -220,7 +234,11 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
-        ICompliantLogic(logic).compliantLogic(user, isCompliant);
+        /// @dev if logic implementation reverts, complete tx with event indicating as such
+        try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
+        catch (bytes memory err) {
+            emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
+        }
     }
 
     /// @dev admin function for withdrawing protocol fees
@@ -295,6 +313,11 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev reverts if the user is not compliant
     function _revertIfNonCompliant(address user) internal view {
         if (!_isCompliant(user)) revert CompliantRouter__NonCompliantUser(user);
+    }
+
+    /// @dev reverts if logic does not implement expected interface
+    function _revertIfNotCompliantLogic(address logic) internal view {
+        if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
     }
 
     /// @dev checks if the user is compliant
