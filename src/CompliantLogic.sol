@@ -37,7 +37,7 @@ abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     /// @param interfaceId The interfaceId to check
     /// @return true if the interfaceId is supported
     /// @dev Should indicate whether the contract implements ICompliantLogic
-    function supportsInterface(bytes4 interfaceId) external view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return interfaceId == type(ICompliantLogic).interfaceId || interfaceId == type(IERC165).interfaceId;
     }
 

@@ -12,7 +12,7 @@ contract WithdrawFeesTest is BaseTest {
     function setUp() public override {
         BaseTest.setUp();
 
-        uint256 approvalAmount = compliant.getFee();
+        uint256 approvalAmount = compliantRouter.getFee();
 
         vm.prank(user);
         LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
@@ -63,6 +63,6 @@ contract WithdrawFeesTest is BaseTest {
     function test_compliant_withdrawFees_revertsWhen_notProxy() public {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyProxy()"));
-        compliant.withdrawFees();
+        compliantRouter.withdrawFees();
     }
 }

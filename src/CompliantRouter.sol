@@ -16,7 +16,7 @@ import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {ICompliantLogic} from "./interfaces/ICompliantLogic.sol";
 import {ICompliantRouter} from "./interfaces/ICompliantRouter.sol";
 
-/// @notice A template contract for requesting and getting the KYC compliant status of an address.
+/// @notice This contract facilitates KYC status requests and routes automated responses to a CompliantLogic implementation.
 contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, IERC677Receiver, ICompliantRouter {
     /*//////////////////////////////////////////////////////////////
                            TYPE DECLARATIONS
@@ -78,7 +78,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
-    // review order of user and logic
     /// @dev emitted when KYC status of an address is requested
     event CompliantStatusRequested(bytes32 indexed everestRequestId, address indexed user, address indexed logic);
     /// @dev emitted when KYC status of an address is fulfilled
@@ -124,11 +123,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                                 EXTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @notice transferAndCall LINK to this address to skip executing 2 txs with approve and requestKycStatus
-    /// @param amount fee to pay for the request - get it from getFee() or getFeeWithAutomation()
-    // review this natspec
-    /// @param data encoded data should contain the user address to request the kyc status of, a boolean
-    /// indicating whether automation should be used to subsequently execute logic based on the immediate result,
-    /// and arbitrary data to be passed to compliant restricted logic
+    /// @param amount fee to pay for the request - get it from getFee()
+    /// @param data encoded data should contain the user address to request the kyc status of and the address of the
+    /// CompliantLogic contract to call with fulfilled result
     function onTokenTransfer(
         address,
         /* sender */
@@ -143,6 +140,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         // we would only want to make the call to getFee once, then perhaps pass to _handleFees()
         // but we need to account for compliantFees separately, and dont want to do those external calls twice
         // uint256 fee = 1;
+        // is this the best way to handle the amount < fees check?
         uint256 fees = _handleFees(true); // true for isOnTokenTransfer
         if (amount < fees) {
             revert CompliantRouter__InsufficientLinkTransferAmount(fees);
@@ -164,7 +162,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev continuously simulated by Chainlink offchain Automation nodes
     /// @param log ILogAutomation.Log
     /// @return upkeepNeeded evaluates to true if the Fulfilled log contains a pending request
-    /// @return performData contains fulfilled pending requestId, requestedAddress and if they are compliant
+    /// @return performData contains fulfilled pending requestId, user, logic and if user isCompliant
     /// @notice for some unit tests to run successfully `cannotExecute` modifier should be commented out
     function checkLog(Log calldata log, bytes memory)
         external
@@ -362,9 +360,23 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return _calculateCompliantFee();
     }
 
+    /// @notice returns the everest fee for a request
+    function getEverestFee() external view returns (uint256) {
+        return _getEverestFee();
+    }
+
+    /// @notice returns the automation fee for a request
+    function getAutomationFee() external view returns (uint96) {
+        return _getAutomationFee();
+    }
+
     /// @notice returns the protocol fees available to withdraw by admin
     function getCompliantFeesToWithdraw() external view returns (uint256) {
         return s_compliantFeesInLink;
+    }
+
+    function getPendingRequest(bytes32 requestId) external view returns (PendingRequest memory) {
+        return s_pendingRequests[requestId];
     }
 
     function getEverest() external view returns (address) {
@@ -389,9 +401,5 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     function getProxy() external view returns (address) {
         return i_proxy;
-    }
-
-    function getPendingRequest(bytes32 requestId) external view returns (PendingRequest memory) {
-        return s_pendingRequests[requestId];
     }
 }

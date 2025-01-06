@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {BaseTest, Vm, LinkTokenInterface, Compliant, console2} from "../BaseTest.t.sol";
+import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
 import {MockLinkToken} from "../mocks/MockLinkToken.sol";
 import {LibZip} from "@solady/src/utils/LibZip.sol";
 
 contract OnTokenTransferTest is BaseTest {
     function test_compliant_onTokenTransfer_noAutomation() public {
-        uint256 amount = compliant.getFee();
+        uint256 amount = compliantRouter.getFee();
         /// @dev requesting the kyc status of user
         /// @dev false because we are not performing automation
         /// @dev "" for no compliantCalldata because we are not automating anything to pass it to
@@ -37,7 +37,7 @@ contract OnTokenTransferTest is BaseTest {
     }
 
     function test_compliant_onTokenTransfer_automation() public {
-        uint256 amount = compliant.getFeeWithAutomation();
+        uint256 amount = compliantRouter.getFee();
         bytes memory compliantCalldata = abi.encode(1);
         /// @dev requesting the kyc status of user
         /// @dev true because we are performing automation
@@ -65,15 +65,10 @@ contract OnTokenTransferTest is BaseTest {
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
 
-        Compliant.PendingRequest memory pendingRequest = abi.decode(retData, (Compliant.PendingRequest));
+        CompliantRouter.PendingRequest memory pendingRequest = abi.decode(retData, (CompliantRouter.PendingRequest));
         bool isPending = pendingRequest.isPending;
-        bytes memory storedCalldata = pendingRequest.compliantCalldata;
-
-        /// @dev decompress storedCalldata
-        bytes memory decompressedData = LibZip.cdDecompress(storedCalldata);
 
         assertTrue(isPending);
-        assertEq(decompressedData, compliantCalldata);
         assertEq(emittedRequestId, expectedRequestId);
         assertEq(user, emittedUser);
     }
@@ -83,7 +78,7 @@ contract OnTokenTransferTest is BaseTest {
         MockLinkToken erc677 = new MockLinkToken();
         erc677.initializeMockLinkToken();
 
-        uint256 amount = compliant.getFee();
+        uint256 amount = compliantRouter.getFee();
         bytes memory data = abi.encode(user, false);
 
         vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyLinkToken()"));
@@ -93,7 +88,7 @@ contract OnTokenTransferTest is BaseTest {
 
     function test_compliant_onTokenTransfer_revertsWhen_insufficientAmount() public {
         vm.startPrank(user);
-        uint256 fee = compliant.getFee();
+        uint256 fee = compliantRouter.getFee();
         uint256 amount = fee - 1;
         bytes memory data = abi.encode(user, false, "");
 
@@ -103,7 +98,7 @@ contract OnTokenTransferTest is BaseTest {
     }
 
     function test_compliant_onTokenTransfer_revertsWhen_notProxy() public {
-        uint256 amount = compliant.getFeeWithAutomation();
+        uint256 amount = compliantRouter.getFee();
         bytes memory compliantCalldata = abi.encode(1);
         /// @dev requesting the kyc status of user
         /// @dev true because we are performing automation
@@ -111,6 +106,6 @@ contract OnTokenTransferTest is BaseTest {
 
         vm.prank(user);
         vm.expectRevert(); // abi.encodeWithSignature("Compliant__OnlyProxy()")
-        LinkTokenInterface(link).transferAndCall(address(compliant), amount, data);
+        LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
     }
 }

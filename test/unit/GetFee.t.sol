@@ -13,9 +13,13 @@ contract GetFeeTest is BaseTest {
         /// @dev get price of LINK in USD
         (, int256 price,,,) = AggregatorV3Interface(linkUsdFeed).latestRoundData();
 
+        /// @dev get Everest and Automation fees
+        uint256 everestFee = compliantRouter.getEverestFee();
+        uint256 automationFee = compliantRouter.getAutomationFee();
+
         /// @dev get the totalFee
-        uint256 totalFee = compliant.getFee();
-        uint256 compliantFee = totalFee - IEverestConsumer(address(everest)).oraclePayment();
+        uint256 totalFee = compliantRouter.getFee();
+        uint256 compliantFee = totalFee - (everestFee + automationFee);
 
         /// @dev calculate expected fee
         uint256 expectedFee = (COMPLIANT_FEE * WAD_PRECISION) / uint256(price);

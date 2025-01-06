@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {Test, Vm, console2} from "forge-std/Test.sol";
-import {Compliant} from "../../src/Compliant.sol";
+import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {MockLinkToken} from "./mocks/MockLinkToken.sol";
 import {MockEverestConsumer} from "./mocks/MockEverestConsumer.sol";
@@ -27,7 +27,7 @@ contract BaseTest is Test {
     uint256 internal constant USER_LINK_BALANCE = 100 * 1e18;
 
     CompliantProxy internal compliantProxy;
-    Compliant internal compliant;
+    CompliantRouter internal compliantRouter;
     MockEverestConsumer internal everest;
     address internal link;
     address internal linkUsdFeed;
@@ -76,15 +76,16 @@ contract BaseTest is Test {
         upkeepId = _registerAutomation(address(compliantProxy), address(everest));
         forwarder = IAutomationRegistryMaster(registry).getForwarder(upkeepId);
 
-        /// @dev deploy Compliant
+        /// @dev deploy CompliantRouter
         vm.prank(deployer);
-        compliant = new Compliant(address(everest), link, linkUsdFeed, forwarder, upkeepId, address(compliantProxy));
+        compliantRouter =
+            new CompliantRouter(address(everest), link, linkUsdFeed, forwarder, upkeepId, address(compliantProxy));
 
-        /// @dev upgradeToAndCall - set Compliant to new implementation and initialize deployer to owner
+        /// @dev upgradeToAndCall - set CompliantRouter to new implementation and initialize deployer to owner
         bytes memory initializeData = abi.encodeWithSignature("initialize(address)", deployer);
         vm.prank(proxyDeployer);
         ProxyAdmin(proxyAdmin).upgradeAndCall(
-            ITransparentUpgradeableProxy(address(compliantProxy)), address(compliant), initializeData
+            ITransparentUpgradeableProxy(address(compliantProxy)), address(compliantRouter), initializeData
         );
 
         /// @dev set CompliantProxyAdmin to address(0) - making its last upgrade final and immutable
@@ -114,15 +115,19 @@ contract BaseTest is Test {
     }
 
     /// @dev set the user to pending request
-    function _setUserPendingRequest(bytes memory compliantCalldata) internal {
-        uint256 amount = compliant.getFeeWithAutomation();
-        bytes memory data = abi.encode(user, true, compliantCalldata);
+    function _setUserPendingRequest(address logic) internal {
+        uint256 amount = compliantRouter.getFee();
+        bytes memory data = abi.encode(user, logic);
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 
+        // will probably need a function like Everest's getLatestRequestId()
+
+        bytes32 requestId;
+
         (, bytes memory retData) =
-            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
-        Compliant.PendingRequest memory request = abi.decode(retData, (Compliant.PendingRequest));
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
+        CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
         assertTrue(request.isPending);
     }
 
