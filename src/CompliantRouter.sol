@@ -143,11 +143,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         _revertIfNotCompliantLogic(logic);
 
-        // review can we change returning the fees from _handleFees to calling getFee()?
-        // we would only want to make the call to getFee once, then perhaps pass to _handleFees()
-        // but we need to account for compliantFees separately, and dont want to do those external calls twice
-        // uint256 fee = 1;
-        // is this the best way to handle the amount < fees check?
         uint256 fees = _handleFees(true); // true for isOnTokenTransfer
         if (amount < fees) {
             revert CompliantRouter__InsufficientLinkTransferAmount(fees);
@@ -176,7 +171,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        // cannotExecute
+        cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
@@ -207,7 +202,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             _revertIfNotCompliantLogic(logic);
 
             /// @dev revert if the user emitted by the Everest.Fulfill log is not the same as the one stored in request
-            // review how redundant is this? can we even reach this check in unit tests?
+            /// @notice this check is a bit redundant too
             if (user != request.user) revert CompliantRouter__InvalidUser();
 
             /// @dev revert if request is not pending
@@ -222,7 +217,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @notice called by Chainlink Automation forwarder when the request is fulfilled
     /// @dev this function should contain the logic restricted for compliant only users
-    /// @param performData encoded bytes contains bytes32 requestId, address of requested user and bool isCompliant
+    /// @param performData encoded bytes contains bytes32 requestId, address user, address logic and bool isCompliant
     function performUpkeep(bytes calldata performData) external onlyProxy {
         if (msg.sender != address(i_forwarder)) {
             revert CompliantRouter__OnlyForwarder();
