@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
-import {MockLinkToken} from "../mocks/MockLinkToken.sol";
+import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../../BaseTest.t.sol";
+import {MockLinkToken} from "../../mocks/MockLinkToken.sol";
 
 contract OnTokenTransferTest is BaseTest {
     function test_compliant_onTokenTransfer_success() public {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {BaseTest, Vm, CompliantRouter} from "../BaseTest.t.sol";
-import {LogicWrapperRevert} from "../wrappers/LogicWrapperRevert.sol";
+import {BaseTest, Vm, CompliantRouter} from "../../BaseTest.t.sol";
+import {LogicWrapperRevert} from "../../wrappers/LogicWrapperRevert.sol";
 
 contract PerformUpkeepTest is BaseTest {
     function test_compliant_performUpkeep_isCompliant() public {

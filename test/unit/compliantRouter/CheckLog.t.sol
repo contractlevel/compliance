@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {BaseTest, LinkTokenInterface, CompliantRouter} from "../BaseTest.t.sol";
+import {BaseTest, LinkTokenInterface, CompliantRouter} from "../../BaseTest.t.sol";
 import {ILogAutomation, Log} from "@chainlink/contracts/src/v0.8/automation/interfaces/ILogAutomation.sol";
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 

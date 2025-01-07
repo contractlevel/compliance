@@ -20,7 +20,7 @@ abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
-    event NonCompliantUser(address nonCompliantUser);
+    event NonCompliantUser(address indexed nonCompliantUser);
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -54,4 +54,12 @@ abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     //////////////////////////////////////////////////////////////*/
     /// @notice override this function in your implementation
     function _compliantLogic(address user) internal virtual;
+
+    /*//////////////////////////////////////////////////////////////
+                                 GETTER
+    //////////////////////////////////////////////////////////////*/
+    /// @notice returns the CompliantRouter contract address
+    function getCompliantRouter() external view returns (address) {
+        return i_compliantRouter;
+    }
 }

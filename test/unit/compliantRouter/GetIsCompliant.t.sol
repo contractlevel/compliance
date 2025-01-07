@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.24;
 
-import {BaseTest} from "../BaseTest.t.sol";
-import {MockEverestConsumer} from "../mocks/MockEverestConsumer.sol";
+import {BaseTest} from "../../BaseTest.t.sol";
+import {MockEverestConsumer} from "../../mocks/MockEverestConsumer.sol";
 
 contract GetIsCompliantTest is BaseTest {
     function test_compliant_getIsCompliant() public {

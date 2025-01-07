@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.24;
 
-import {BaseTest, LinkTokenInterface, console2} from "../BaseTest.t.sol";
+import {BaseTest, LinkTokenInterface, console2} from "../../BaseTest.t.sol";
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 
 contract WithdrawFeesTest is BaseTest {
