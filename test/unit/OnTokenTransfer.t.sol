@@ -3,7 +3,6 @@ pragma solidity 0.8.24;
 
 import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
 import {MockLinkToken} from "../mocks/MockLinkToken.sol";
-import {LibZip} from "@solady/src/utils/LibZip.sol";
 
 contract OnTokenTransferTest is BaseTest {
     function test_compliant_onTokenTransfer_success() public {
@@ -64,7 +63,7 @@ contract OnTokenTransferTest is BaseTest {
         vm.startPrank(user);
         uint256 fee = compliantRouter.getFee();
         uint256 amount = fee - 1;
-        bytes memory data = abi.encode(user, false, "");
+        bytes memory data = abi.encode(user, address(logic));
 
         // abi.encodeWithSignature("CompliantRouter__InsufficientLinkTransferAmount(uint256,uint256)", amount, fee)
         vm.expectRevert();

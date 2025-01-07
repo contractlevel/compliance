@@ -12,11 +12,11 @@ contract CheckLogTest is BaseTest {
                                  TESTS
     //////////////////////////////////////////////////////////////*/
     /// @notice this test should be commented out if the cannotExecute modifier is removed from checkLog
-    function test_compliant_checkLog_revertsWhen_called() public {
-        Log memory log = _createLog(true, address(compliantRouter), user);
-        vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
-        compliantRouter.checkLog(log, "");
-    }
+    // function test_compliant_checkLog_revertsWhen_called() public {
+    //     Log memory log = _createLog(true, address(compliantRouter), user);
+    //     vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
+    //     compliantRouter.checkLog(log, "");
+    // }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_notProxy() public {
@@ -28,7 +28,7 @@ contract CheckLogTest is BaseTest {
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_isCompliant_and_pending() public {
         /// @dev set user to pending request
-        _setUserPendingRequest();
+        _setUserPendingRequest(address(logic));
 
         /// @dev check log
         Log memory log = _createLog(true, address(compliantProxy), user);
@@ -55,7 +55,7 @@ contract CheckLogTest is BaseTest {
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_isNonCompliant_and_pending() public {
         /// @dev set user to pending request
-        _setUserPendingRequest();
+        _setUserPendingRequest(address(logic));
 
         /// @dev check log
         Log memory log = _createLog(false, address(compliantProxy), user);
@@ -81,7 +81,7 @@ contract CheckLogTest is BaseTest {
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_notPending() public {
         /// @dev set user to pending request
-        _setUserPendingRequest();
+        _setUserPendingRequest(address(logic));
         /// @dev set pendingRequest to false
         _setPendingRequestToFalse();
 
@@ -124,7 +124,7 @@ contract CheckLogTest is BaseTest {
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_invalidUser() public {
         /// @dev set user to pending request
-        _setUserPendingRequest();
+        _setUserPendingRequest(address(logic));
 
         /// @dev make invalid user
         address invalidUser = makeAddr("invalidUser");

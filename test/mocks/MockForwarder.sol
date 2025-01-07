@@ -14,4 +14,7 @@ contract MockForwarder {
     function getRegistry() external view returns (IAutomationRegistryConsumer) {
         return s_registry;
     }
+
+    /// @notice Empty test function to ignore file in coverage report
+    function test_mockForwarder() public {}
 }

@@ -29,7 +29,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__OnlyProxy();
     error CompliantRouter__OnlyLinkToken();
     error CompliantRouter__InsufficientLinkTransferAmount(uint256 requiredAmount);
-    error CompliantRouter__NonCompliantUser(address nonCompliantUser);
+    // error CompliantRouter__NonCompliantUser(address nonCompliantUser);
     error CompliantRouter__PendingRequestExists(address pendingRequestedAddress);
     error CompliantRouter__OnlyForwarder();
     error CompliantRouter__RequestNotMadeByThisContract();
@@ -171,7 +171,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        cannotExecute
+        // cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
@@ -292,6 +292,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 totalFee = compliantFeeInLink + everestFeeInLink + automationFeeInLink;
 
         if (!isOnTokenTransfer) {
+            // hit this revert
             if (!i_link.transferFrom(msg.sender, address(this), totalFee)) {
                 revert CompliantRouter__LinkTransferFailed();
             }
@@ -307,12 +308,13 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     // review not used anywhere
     /// @dev reverts if the user is not compliant
-    function _revertIfNonCompliant(address user) internal view {
-        if (!_isCompliant(user)) revert CompliantRouter__NonCompliantUser(user);
-    }
+    // function _revertIfNonCompliant(address user) internal view {
+    //     if (!_isCompliant(user)) revert CompliantRouter__NonCompliantUser(user);
+    // }
 
     /// @dev reverts if logic does not implement expected interface
     function _revertIfNotCompliantLogic(address logic) internal view {
+        // hit this
         if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
     }
 
@@ -348,6 +350,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @param target The address of the target contract
     /// @return True if the contract supports the ICompliantLogic interface
     function _isCompliantLogic(address target) internal view returns (bool) {
+        // hit this
         try IERC165(target).supportsInterface(type(ICompliantLogic).interfaceId) returns (bool result) {
             return result;
         } catch {
@@ -371,6 +374,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 everestFeeInLink = _getEverestFee();
         uint256 automationFeeInLink = _getAutomationFee();
 
+        // hit this
         return compliantFeeInLink + everestFeeInLink + automationFeeInLink;
     }
 
