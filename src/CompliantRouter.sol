@@ -229,7 +229,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
         /// @dev if logic implementation reverts, complete tx with event indicating as such
-        try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
+        try ICompliantLogic(logic).compliantLogic(user, isCompliant) {} // hit this
         catch (bytes memory err) {
             emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
         }
@@ -292,6 +292,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         if (!isOnTokenTransfer) {
             if (!i_link.transferFrom(msg.sender, address(this), totalFee)) {
+                // hit this
                 revert CompliantRouter__LinkTransferFailed();
             }
         }
@@ -306,7 +307,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @dev reverts if logic does not implement expected interface
     function _revertIfNotCompliantLogic(address logic) internal view {
-        // hit this
         if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
     }
 
@@ -339,14 +339,12 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @notice Checks if a contract implements the ICompliantLogic interface
-    /// @param target The address of the target contract
+    /// @param logic The address of the target logic contract
     /// @return True if the contract supports the ICompliantLogic interface
-    function _isCompliantLogic(address target) internal view returns (bool) {
-        // hit this
-        try IERC165(target).supportsInterface(type(ICompliantLogic).interfaceId) returns (bool result) {
+    function _isCompliantLogic(address logic) internal view returns (bool) {
+        try IERC165(logic).supportsInterface(type(ICompliantLogic).interfaceId) returns (bool result) {
             return result;
         } catch {
-            // hit this
             return false;
         }
     }
@@ -415,5 +413,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     function getProxy() external view returns (address) {
         return i_proxy;
+    }
+
+    function getIsCompliantLogic(address logic) external view returns (bool) {
+        return _isCompliantLogic(logic);
     }
 }

@@ -82,7 +82,7 @@ contract OnTokenTransferTest is BaseTest {
 
     function test_compliant_onTokenTransfer_revertsWhen_logicIncompatible() public {
         uint256 amount = compliantRouter.getFee();
-        address nonLogic = makeAddr("nonLogic");
+        address nonLogic = address(compliantRouter);
         bytes memory data = abi.encode(user, nonLogic);
 
         vm.prank(user);

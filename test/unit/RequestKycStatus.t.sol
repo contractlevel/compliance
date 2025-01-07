@@ -94,7 +94,7 @@ contract RequestKycStatusTest is BaseTest {
 
     function test_compliant_requestKycStatus_revertsWhen_logicIncompatible() public {
         uint256 approvalAmount = compliantRouter.getFee();
-        address nonLogic = makeAddr("nonLogic");
+        address nonLogic = address(compliantRouter);
 
         vm.startPrank(user);
         LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);

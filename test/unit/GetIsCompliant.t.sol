@@ -13,4 +13,11 @@ contract GetIsCompliantTest is BaseTest {
         bool isCompliant = abi.decode(retData, (bool));
         assertTrue(isCompliant);
     }
+
+    function test_compliant_getIsCompliantLogic() public {
+        address nonLogic = address(compliantRouter);
+
+        assertTrue(compliantRouter.getIsCompliantLogic(address(logic)));
+        assertFalse(compliantRouter.getIsCompliantLogic(address(nonLogic)));
+    }
 }
