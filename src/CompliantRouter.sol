@@ -305,6 +305,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return totalFee;
     }
 
+    // review not used anywhere
     /// @dev reverts if the user is not compliant
     function _revertIfNonCompliant(address user) internal view {
         if (!_isCompliant(user)) revert CompliantRouter__NonCompliantUser(user);
