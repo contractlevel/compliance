@@ -29,7 +29,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__OnlyProxy();
     error CompliantRouter__OnlyLinkToken();
     error CompliantRouter__InsufficientLinkTransferAmount(uint256 requiredAmount);
-    // error CompliantRouter__NonCompliantUser(address nonCompliantUser);
     error CompliantRouter__PendingRequestExists(address pendingRequestedAddress);
     error CompliantRouter__OnlyForwarder();
     error CompliantRouter__RequestNotMadeByThisContract();
@@ -305,12 +304,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return totalFee;
     }
 
-    // review not used anywhere
-    /// @dev reverts if the user is not compliant
-    // function _revertIfNonCompliant(address user) internal view {
-    //     if (!_isCompliant(user)) revert CompliantRouter__NonCompliantUser(user);
-    // }
-
     /// @dev reverts if logic does not implement expected interface
     function _revertIfNotCompliantLogic(address logic) internal view {
         // hit this
@@ -353,7 +346,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         try IERC165(target).supportsInterface(type(ICompliantLogic).interfaceId) returns (bool result) {
             return result;
         } catch {
-            // If supportsInterface fails or reverts, the target does not implement ERC165
+            // hit this
             return false;
         }
     }
@@ -373,7 +366,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 everestFeeInLink = _getEverestFee();
         uint256 automationFeeInLink = _getAutomationFee();
 
-        // hit this
         return compliantFeeInLink + everestFeeInLink + automationFeeInLink;
     }
 

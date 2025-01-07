@@ -25,5 +25,6 @@ contract GetFeeTest is BaseTest {
         uint256 expectedFee = (COMPLIANT_FEE * WAD_PRECISION) / uint256(price);
 
         assertEq(compliantFee, expectedFee);
+        assertEq(compliantFee, compliantRouter.getCompliantFee());
     }
 }
