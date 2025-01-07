@@ -25,11 +25,11 @@ contract WithdrawFeesTest is BaseTest {
         /// @dev call requestKycStatus as user to generate fees
         vm.prank(user);
         (, bytes memory feeRetData) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, false, "")
-        ); // false for no automation
+            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+        );
         uint256 fee = abi.decode(feeRetData, (uint256));
 
-        uint256 compliantFee = fee - IEverestConsumer(address(everest)).oraclePayment();
+        uint256 compliantFee = fee - compliantRouter.getEverestFee() - compliantRouter.getAutomationFee();
 
         uint256 balanceBefore = LinkTokenInterface(link).balanceOf(owner);
 
@@ -62,7 +62,7 @@ contract WithdrawFeesTest is BaseTest {
 
     function test_compliant_withdrawFees_revertsWhen_notProxy() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyProxy()"));
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyProxy()"));
         compliantRouter.withdrawFees();
     }
 }

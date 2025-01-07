@@ -1,162 +1,126 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity 0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
-// import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
-// import {LibZip} from "@solady/src/utils/LibZip.sol";
+import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
 
-// /// review these tests - can be refactored further to improve modularity/readability
-// contract RequestKycStatusTest is BaseTest {
-//     /*//////////////////////////////////////////////////////////////
-//                                  SETUP
-//     //////////////////////////////////////////////////////////////*/
-//     function setUp() public override {
-//         BaseTest.setUp();
+/// review these tests - can be refactored further to improve modularity/readability
+contract RequestKycStatusTest is BaseTest {
+    /*//////////////////////////////////////////////////////////////
+                                 SETUP
+    //////////////////////////////////////////////////////////////*/
+    function setUp() public override {
+        BaseTest.setUp();
 
-//         uint256 approvalAmount = compliantRouter.getFee();
+        uint256 approvalAmount = compliantRouter.getFee();
 
-//         vm.prank(user);
-//         LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
-//     }
+        vm.prank(user);
+        LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
+    }
 
-//     /*//////////////////////////////////////////////////////////////
-//                                  TESTS
-//     //////////////////////////////////////////////////////////////*/
-//     function test_compliant_requestKycStatus_success() public {
-//         uint256 linkBalanceBefore = LinkTokenInterface(link).balanceOf(user);
+    /*//////////////////////////////////////////////////////////////
+                                 TESTS
+    //////////////////////////////////////////////////////////////*/
+    function test_compliant_requestKycStatus_success() public {
+        uint256 linkBalanceBefore = LinkTokenInterface(link).balanceOf(user);
 
-//         vm.recordLogs();
+        vm.recordLogs();
 
-//         uint256 expectedFee = compliantRouter.getFee();
-//         /// @dev call requestKycStatus
-//         uint256 actualFee = _requestKycStatus(user, expectedFee, user, false, "");
+        uint256 expectedFee = compliantRouter.getFee();
+        /// @dev call requestKycStatus
+        uint256 actualFee = _requestKycStatus(user, expectedFee, user, address(logic));
 
-//         Vm.Log[] memory logs = vm.getRecordedLogs();
-//         bytes32 eventSignature = keccak256("KYCStatusRequested(bytes32,address)");
-//         bytes32 emittedRequestId;
-//         address emittedUser;
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 eventSignature = keccak256("CompliantStatusRequested(bytes32,address,address)");
+        bytes32 emittedRequestId;
+        address emittedUser;
+        address emittedLogic;
 
-//         for (uint256 i = 0; i < logs.length; i++) {
-//             if (logs[i].topics[0] == eventSignature) {
-//                 emittedRequestId = logs[i].topics[1];
-//                 emittedUser = address(uint160(uint256(logs[i].topics[2])));
-//             }
-//         }
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == eventSignature) {
+                emittedRequestId = logs[i].topics[1];
+                emittedUser = address(uint160(uint256(logs[i].topics[2])));
+                emittedLogic = address(uint160(uint256(logs[i].topics[3])));
+            }
+        }
 
-//         uint256 linkBalanceAfter = LinkTokenInterface(link).balanceOf(user);
-//         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        uint256 linkBalanceAfter = LinkTokenInterface(link).balanceOf(user);
+        bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
 
-//         assertEq(linkBalanceAfter + expectedFee, linkBalanceBefore);
-//         assertEq(emittedRequestId, expectedRequestId);
-//         assertEq(user, emittedUser);
-//         assertEq(actualFee, expectedFee);
-//     }
+        assertEq(linkBalanceAfter + expectedFee, linkBalanceBefore);
+        assertEq(emittedRequestId, expectedRequestId);
+        assertEq(user, emittedUser);
+        assertEq(address(logic), emittedLogic);
+        assertEq(actualFee, expectedFee);
+    }
 
-//     function test_compliant_requestKycStatus_automation() public {
-//         uint256 linkBalanceBefore = LinkTokenInterface(link).balanceOf(user);
+    function test_compliant_requestKycStatus_revertsWhen_userPendingRequest() public {
+        uint256 approvalAmount = compliantRouter.getFee() * 2;
+        vm.startPrank(user);
+        LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
 
-//         vm.recordLogs();
+        (bool success,) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+        );
+        require(success, "delegate call to requestKycStatus failed");
 
-//         bytes memory compliantCalldata = abi.encode(1);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__PendingRequestExists(address)", user));
+        (bool success2,) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, address(logic))
+        );
+        vm.stopPrank();
+    }
 
-//         uint256 expectedFee = compliantRouter.getFeeWithAutomation();
+    function test_compliant_requestKycStatus_revertsWhen_notProxy() public {
+        uint256 approvalAmount = compliantRouter.getFee();
+        vm.startPrank(user);
+        LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyProxy()"));
+        compliantRouter.requestKycStatus(user, address(logic));
+        vm.stopPrank();
+    }
 
-//         /// @dev call requestKycStatus
-//         uint256 actualFee = _requestKycStatus(user, expectedFee, user, true, compliantCalldata);
+    function test_compliant_requestKycStatus_revertsWhen_insufficientFee() public {
+        uint256 balance = LinkTokenInterface(link).balanceOf(user);
 
-//         Vm.Log[] memory logs = vm.getRecordedLogs();
-//         bytes32 eventSignature = keccak256("KYCStatusRequested(bytes32,address)");
-//         bytes32 emittedRequestId;
-//         address emittedUser;
+        vm.startPrank(user);
+        LinkTokenInterface(link).transfer(address(1), balance);
+        uint256 balanceAfter = LinkTokenInterface(link).balanceOf(user);
+        assertEq(balanceAfter, 0);
 
-//         for (uint256 i = 0; i < logs.length; i++) {
-//             if (logs[i].topics[0] == eventSignature) {
-//                 emittedRequestId = logs[i].topics[1];
-//                 emittedUser = address(uint160(uint256(logs[i].topics[2])));
-//             }
-//         }
+        vm.expectRevert();
+        (bool success,) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+        );
+        vm.stopPrank();
+    }
 
-//         uint256 linkBalanceAfter = LinkTokenInterface(link).balanceOf(user);
+    function test_compliant_requestKycStatus_revertsWhen_logicIncompatible() public {
+        uint256 approvalAmount = compliantRouter.getFee();
+        address nonLogic = makeAddr("nonLogic");
 
-//         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        vm.startPrank(user);
+        LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)", nonLogic));
+        (bool success,) =
+            address(compliantProxy).call(abi.encodeWithSignature("requestKycStatus(address,address)", user, nonLogic));
+        vm.stopPrank();
+    }
 
-//         (, bytes memory requestRetDataAfter) =
-//             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
-//         CompliantRouter.PendingRequest memory pendingRequest =
-//             abi.decode(requestRetDataAfter, (CompliantRouter.PendingRequest));
-//         bool isPending = pendingRequest.isPending;
-//         bytes memory storedCalldata = pendingRequest.compliantCalldata;
+    /*//////////////////////////////////////////////////////////////
+                                UTILITY
+    //////////////////////////////////////////////////////////////*/
+    function _requestKycStatus(address caller, uint256 linkApprovalAmount, address requestedAddress, address logic)
+        internal
+        returns (uint256)
+    {
+        vm.prank(caller);
+        LinkTokenInterface(link).approve(address(compliantProxy), linkApprovalAmount);
+        vm.prank(caller);
+        (, bytes memory retData) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,address)", requestedAddress, logic)
+        );
+        uint256 actualFee = abi.decode(retData, (uint256));
 
-//         assertTrue(isPending);
-//         /// @dev decompress storedCalldata
-//         assertEq(LibZip.cdDecompress(storedCalldata), compliantCalldata);
-//         assertEq(linkBalanceAfter + expectedFee, linkBalanceBefore);
-//         assertEq(emittedRequestId, expectedRequestId);
-//         assertEq(user, emittedUser);
-//         assertEq(actualFee, expectedFee);
-//     }
-
-//     function test_compliant_requestKycStatus_revertsWhen_userPendingRequest() public {
-//         uint256 approvalAmount = compliantRouter.getFeeWithAutomation() * 2;
-//         vm.startPrank(user);
-//         LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
-
-//         (bool success,) = address(compliantProxy).call(
-//             abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, true, "") // true for automation
-//         );
-//         require(success, "delegate call to requestKycStatus failed");
-
-//         vm.expectRevert(abi.encodeWithSignature("Compliant__PendingRequestExists(address)", user));
-//         (bool success2,) = address(compliantProxy).call(
-//             abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, true, "") // true for automation
-//         );
-//         vm.stopPrank();
-//     }
-
-//     function test_compliant_requestKycStatus_revertsWhen_notProxy() public {
-//         uint256 approvalAmount = compliantRouter.getFee() * 2;
-//         vm.startPrank(user);
-//         LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
-//         vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyProxy()"));
-//         compliantRouter.requestKycStatus(user, true, ""); // true for automation
-//     }
-
-//     function test_compliant_requestKycStatus_revertsWhen_insufficientFee() public {
-//         uint256 balance = LinkTokenInterface(link).balanceOf(user);
-//         console2.log("balance:", balance); // 100_000000000000000000
-
-//         vm.startPrank(user);
-//         LinkTokenInterface(link).transfer(address(1), balance);
-//         uint256 balanceAfter = LinkTokenInterface(link).balanceOf(user);
-//         assertEq(balanceAfter, 0);
-
-//         vm.expectRevert();
-//         (bool success,) = address(compliantProxy).call(
-//             abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, true, "") // true for automation
-//         );
-//     }
-
-//     /*//////////////////////////////////////////////////////////////
-//                                 UTILITY
-//     //////////////////////////////////////////////////////////////*/
-//     function _requestKycStatus(
-//         address caller,
-//         uint256 linkApprovalAmount,
-//         address requestedAddress,
-//         bool isAutomation,
-//         bytes memory compliantCalldata
-//     ) internal returns (uint256) {
-//         vm.prank(caller);
-//         LinkTokenInterface(link).approve(address(compliantProxy), linkApprovalAmount);
-//         vm.prank(caller);
-//         (, bytes memory retData) = address(compliantProxy).call(
-//             abi.encodeWithSignature(
-//                 "requestKycStatus(address,bool,bytes)", requestedAddress, isAutomation, compliantCalldata
-//             )
-//         );
-//         uint256 actualFee = abi.decode(retData, (uint256));
-
-//         return actualFee;
-//     }
-// }
-
-// test _revertIfNotCompliantLogic for requestKycStatus too
+        return actualFee;
+    }
+}
