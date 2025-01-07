@@ -2,6 +2,12 @@
 pragma solidity 0.8.24;
 
 import {BaseTest, Vm, LinkTokenInterface, CompliantRouter, console2} from "../BaseTest.t.sol";
+import {MockLinkFail} from "../mocks/MockLinkFail.sol";
+import {
+    TransparentUpgradeableProxy,
+    ITransparentUpgradeableProxy,
+    ProxyAdmin
+} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// review these tests - can be refactored further to improve modularity/readability
 contract RequestKycStatusTest is BaseTest {
@@ -79,6 +85,18 @@ contract RequestKycStatusTest is BaseTest {
         vm.stopPrank();
     }
 
+    function test_compliant_requestKycStatus_revertsWhen_logicIncompatible() public {
+        uint256 approvalAmount = compliantRouter.getFee();
+        address nonLogic = address(compliantRouter);
+
+        vm.startPrank(user);
+        LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)", nonLogic));
+        (bool success,) =
+            address(compliantProxy).call(abi.encodeWithSignature("requestKycStatus(address,address)", user, nonLogic));
+        vm.stopPrank();
+    }
+
     function test_compliant_requestKycStatus_revertsWhen_insufficientFee() public {
         uint256 insufficientFee = compliantRouter.getFee() - 1;
 
@@ -92,15 +110,29 @@ contract RequestKycStatusTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_compliant_requestKycStatus_revertsWhen_logicIncompatible() public {
-        uint256 approvalAmount = compliantRouter.getFee();
-        address nonLogic = address(compliantRouter);
+    function test_compliant_requestKycStatus_revertsWhen_linkFails() public {
+        vm.prank(user);
+        MockLinkFail linkFail = new MockLinkFail();
 
+        /// @dev deploy infrastructure again with failing LINK token
+        vm.prank(deployer);
+        CompliantRouter compliantRouterLinkFail = new CompliantRouter(
+            address(everest), address(linkFail), linkUsdFeed, forwarder, upkeepId, address(compliantProxy)
+        );
+
+        /// @dev upgradeToAndCall - set CompliantRouter to new implementation and initialize deployer to owner
+        vm.prank(ProxyAdmin(proxyAdmin).owner());
+        ProxyAdmin(proxyAdmin).upgradeAndCall(
+            ITransparentUpgradeableProxy(address(compliantProxy)), address(compliantRouterLinkFail), ""
+        );
+
+        /// @dev approve LINK spending and assert revert for executing valid request with failing token
         vm.startPrank(user);
-        LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
-        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)", nonLogic));
-        (bool success,) =
-            address(compliantProxy).call(abi.encodeWithSignature("requestKycStatus(address,address)", user, nonLogic));
+        LinkTokenInterface(link).approve(address(compliantProxy), compliantRouter.getFee());
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__LinkTransferFailed()"));
+        (bool success,) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+        );
         vm.stopPrank();
     }
 

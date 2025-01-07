@@ -41,6 +41,7 @@ contract BaseTest is Test {
     address internal user = makeAddr("user");
     address internal proxyDeployer = makeAddr("proxyDeployer");
     address internal owner;
+    address internal proxyAdmin;
     LogicWrapper internal logic;
 
     uint256 internal ethMainnetFork;
@@ -67,7 +68,6 @@ contract BaseTest is Test {
         /// @dev get proxyAdmin contract address from logs
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 eventSignature = keccak256("AdminChanged(address,address)");
-        address proxyAdmin;
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].topics[0] == eventSignature) {
                 (, proxyAdmin) = abi.decode(logs[i].data, (address, address));
