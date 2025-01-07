@@ -386,34 +386,42 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         return s_compliantFeesInLink;
     }
 
+    /// @notice returns PendingRequest struct mapped to requestId
     function getPendingRequest(bytes32 requestId) external view returns (PendingRequest memory) {
         return s_pendingRequests[requestId];
     }
 
+    /// @notice returns Everest Consumer contract address
     function getEverest() external view returns (address) {
         return address(i_everest);
     }
 
+    /// @notice returns LINK token contract address
     function getLink() external view returns (address) {
         return address(i_link);
     }
 
+    /// @notice returns LINK/USD price feed contract
     function getLinkUsdFeed() external view returns (AggregatorV3Interface) {
         return i_linkUsdFeed;
     }
 
+    /// @notice returns Chainlink Automation forwarder
     function getForwarder() external view returns (IAutomationForwarder) {
         return i_forwarder;
     }
 
+    /// @notice returns Chainlink Automation upkeepID
     function getUpkeepId() external view returns (uint256) {
         return i_upkeepId;
     }
 
+    /// @notice returns the proxy contract address to delegatecalls through
     function getProxy() external view returns (address) {
         return i_proxy;
     }
 
+    /// @notice returns true if a contract address implements CompliantLogic interface
     function getIsCompliantLogic(address logic) external view returns (bool) {
         return _isCompliantLogic(logic);
     }
