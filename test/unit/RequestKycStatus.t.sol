@@ -80,14 +80,12 @@ contract RequestKycStatusTest is BaseTest {
     }
 
     function test_compliant_requestKycStatus_revertsWhen_insufficientFee() public {
-        uint256 balance = LinkTokenInterface(link).balanceOf(user);
+        uint256 insufficientFee = compliantRouter.getFee() - 1;
 
         vm.startPrank(user);
-        LinkTokenInterface(link).transfer(address(1), balance);
-        uint256 balanceAfter = LinkTokenInterface(link).balanceOf(user);
-        assertEq(balanceAfter, 0);
+        LinkTokenInterface(link).approve(address(compliantProxy), insufficientFee);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__LinkTransferFailed()"));
         (bool success,) = address(compliantProxy).call(
             abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
         );

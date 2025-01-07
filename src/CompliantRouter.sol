@@ -292,7 +292,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 totalFee = compliantFeeInLink + everestFeeInLink + automationFeeInLink;
 
         if (!isOnTokenTransfer) {
-            // hit this revert
             if (!i_link.transferFrom(msg.sender, address(this), totalFee)) {
                 revert CompliantRouter__LinkTransferFailed();
             }
