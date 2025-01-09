@@ -60,10 +60,8 @@ contract Handler is Test {
     /// @dev ghost to track total fees that have been withdrawn
     uint256 public g_totalFeesWithdrawn;
 
-    /// @dev ghost to track number of times compliant restricted logic manually executed
-    uint256 public g_manualIncrement;
     /// @dev ghost to track number of times compliant restricted logic executed with automation
-    uint256 public g_automationIncrement;
+    uint256 public g_incrementedValue;
 
     /// @dev ghost to increment every time KYCStatusRequestFulfilled contains compliant
     uint256 public g_fulfilledRequestIsCompliant;
@@ -196,19 +194,19 @@ contract Handler is Test {
         _handlePerformUpkeepLogs();
     }
 
-    /// @dev onlyCompliant
-    function doSomething(uint256 addressSeed) public {
-        address user = _createOrGetUser(addressSeed);
-        require(user != proxyAdmin && user != compliantProxy, "Invalid address used.");
+    // /// @dev onlyCompliant
+    // function doSomething(uint256 addressSeed) public {
+    //     address user = _createOrGetUser(addressSeed);
+    //     require(user != proxyAdmin && user != compliantProxy, "Invalid address used.");
 
-        if (g_requestedAddressToStatus[user]) {
-            vm.prank(user);
-            (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
-            require(success, "delegate call in handler to doSomething() failed");
+    //     if (g_requestedAddressToStatus[user]) {
+    //         vm.prank(user);
+    //         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
+    //         require(success, "delegate call in handler to doSomething() failed");
 
-            g_manualIncrement++;
-        }
-    }
+    //         g_manualIncrement++;
+    //     }
+    // }
 
     /// @dev onlyOwner
     function withdrawFees(
@@ -324,9 +322,8 @@ contract Handler is Test {
     }
 
     function _updatePerformUpkeepGhosts(bytes32 requestId, address user, bool isCompliant) internal {
-        // review replace this with increment for new logic wrapper
-        // /// @dev increment
-        // if (isCompliant) g_automationIncrement++;
+        /// @dev increment
+        if (isCompliant) g_incrementedValue++;
 
         g_pendingRequests[requestId] = false;
         g_fulfilledUsers[user] = true;

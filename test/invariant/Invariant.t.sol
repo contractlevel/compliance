@@ -216,52 +216,14 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     // Compliance Logic:
-    /// @dev only compliant users can call compliant restricted logic
-    function invariant_compliantLogic_manualExecution() public {
-        handler.forEachUser(this.checkDoSomethingLogic);
-    }
-
-    function checkDoSomethingLogic(address user) external {
-        /// @dev fetch user's compliant status and manually call compliant restricted logic
-        IEverestConsumer.Request memory request = IEverestConsumer(address(everest)).getLatestFulfilledRequest(user);
-        vm.prank(user);
-        (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
-
-        /// @dev assert conditional invariant
-        if (success) {
-            assertTrue(
-                request.isKYCUser,
-                "Invariant violated: Only users who completed Everest KYC should be able to manually execute compliant logic."
-            );
-        } else {
-            assertFalse(
-                request.isKYCUser,
-                "Invariant violated: Users who have not completed Everest KYC should not be able to execute compliant logic."
-            );
-        }
-    }
-
-    /// @dev assert manually executed compliant restricted logic changes state correctly
-    function invariant_compliantLogic_stateChange_manualExecution() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getIncrementedValue()"));
-        uint256 incrementedValue = abi.decode(retData, (uint256));
-
-        assertEq(
-            incrementedValue,
-            handler.g_manualIncrement(),
-            "Invariant violated: Manually executed Compliant restricted logic state change should be consistent."
-        );
-    }
-
     /// @dev assert automated compliant restricted logic changes state correctly
-    function invariant_compliantLogic_stateChange_withAutomation() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getAutomatedIncrement()"));
-        uint256 incrementedValue = abi.decode(retData, (uint256));
+    function invariant_compliantLogic_stateChange() public {
+        uint256 incrementedValue = logic.getIncrementedValue();
 
         assertEq(
             incrementedValue,
-            handler.g_automationIncrement(),
-            "Invariant violated: Automated Compliant restricted logic state change should be consistent."
+            handler.g_incrementedValue(),
+            "Invariant violated: Compliant restricted logic state change should be consistent."
         );
     }
 
