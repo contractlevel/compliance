@@ -199,24 +199,9 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     // Fee Calculation:
-    /// @dev the fee for KYC requests should always be the sum of _calculateCompliantFee() + i_everest.oraclePayment().
-    function invariant_feeCalculation_noAutomation() public {
+    /// @dev the fee for requests should always be the sum of compliantFee, everestFee and upkeep minBalance.
+    function invariant_feeCalculation() public {
         (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getFee()"));
-        uint256 fee = abi.decode(retData, (uint256));
-
-        uint256 oraclePayment = IEverestConsumer(address(everest)).oraclePayment();
-        uint256 expectedFee = oraclePayment + compliantRouter.getCompliantFee();
-
-        assertEq(
-            fee,
-            expectedFee,
-            "Invariant violated: Fee for a standard request should always be equal to Compliant and Everest fee."
-        );
-    }
-
-    /// @dev the fee for automated requests should always be the sum of compliantFee, everestFee and upkeep minBalance.
-    function invariant_feeCalculation_withAutomation() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getFeeWithAutomation()"));
         uint256 fee = abi.decode(retData, (uint256));
 
         uint256 oraclePayment = IEverestConsumer(address(everest)).oraclePayment();
