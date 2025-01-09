@@ -160,7 +160,7 @@ contract Invariant is StdInvariant, BaseTest {
 
         assertEq(
             request.isPending,
-            handler.g_pendingRequests(user), // this needs to be updated to requestId
+            handler.g_pendingRequests(requestId), // this needs to be updated to requestId
             "Invariant violated: Pending request should only be true whilst waiting for Chainlink Automation to be fulfilled."
         );
     }

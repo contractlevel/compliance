@@ -115,9 +115,9 @@ contract Handler is Test {
     /// @dev ghost to track requestedAddresses to compliant status
     mapping(address requestedAddress => bool isCompliant) public g_requestedAddressToStatus;
     /// @dev ghost to track pending requests
-    mapping(address requestedAddress => bool isPending) public g_pendingRequests;
-    /// @dev ghost to track requestedAddresses to compliant calldata
-    mapping(address requestedAddress => bytes compliantCalldata) public g_requestedAddressToCalldata;
+    mapping(bytes32 requestId => bool isPending) public g_pendingRequests;
+    /// @dev ghost to track requestId to user
+    mapping(bytes32 requestId => address user) public g_requestIdToUser;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -180,14 +180,20 @@ contract Handler is Test {
             vm.stopPrank();
         }
 
+        /// @dev get the requestId from recorded logs and update relevant ghosts and simulated Everest fulfill
+        bytes32 requestId = _handleRequestLogs();
+
         /// @dev update relevant ghosts for request
-        _updateRequestGhosts(user);
+        _updateRequestGhosts(requestId, user);
+
+        /// @dev record logs again
+        vm.recordLogs();
 
         /// @dev simulate automation with performUpkeep
         _performUpkeep(user, isCompliant);
 
-        /// @dev get recorded logs and update relevant ghosts for requested event and simulated Everest fulfill
-        _handleRequestLogs(user);
+        /// @dev handle logs for performUpkeep
+        _handlePerformUpkeepLogs();
     }
 
     /// @dev onlyCompliant
@@ -273,7 +279,7 @@ contract Handler is Test {
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
         require(success, "delegate call in handler to performUpkeep() failed");
 
-        _updatePerformUpkeepGhosts(requestedAddress, isCompliant);
+        _updatePerformUpkeepGhosts(requestId, requestedAddress, isCompliant);
     }
 
     function _handleOnlyProxyError(bytes memory error) internal {
@@ -298,9 +304,11 @@ contract Handler is Test {
         return (user, amount);
     }
 
-    function _updateRequestGhosts(address user) internal {
+    function _updateRequestGhosts(bytes32 requestId, address user) internal {
         /// @dev set request to pending
-        g_pendingRequests[user] = true;
+        g_pendingRequests[requestId] = true;
+        g_requestIdToUser[requestId] = user;
+
         g_linkAddedToRegistry += IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
 
         /// @dev update totalFeesEarned ghost
@@ -314,33 +322,36 @@ contract Handler is Test {
         g_lastAutomationFee = IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
     }
 
-    function _updatePerformUpkeepGhosts(address user, bool isCompliant) internal {
-        /// @dev increment
-        if (isCompliant) g_automationIncrement++;
+    function _updatePerformUpkeepGhosts(bytes32 requestId, address user, bool isCompliant) internal {
+        // review replace this with increment for new logic wrapper
+        // /// @dev increment
+        // if (isCompliant) g_automationIncrement++;
 
-        g_pendingRequests[user] = false;
+        g_pendingRequests[requestId] = false;
         g_fulfilledUsers[user] = true;
         g_requestsFulfilled++;
     }
 
-    function _handleRequestLogs(address user) internal {
-        bytes32 kycStatusRequested = keccak256("KYCStatusRequested(bytes32,address)");
+    function _handleRequestLogs() internal returns (bytes32) {
+        bytes32 compliantStatusRequested = keccak256("CompliantStatusRequested(bytes32,address,address)");
         bytes32 everestFulfilled = keccak256("Fulfilled(bytes32,address,address,uint8,uint40)");
-        bytes32 kycStatusRequestFulfilled = keccak256("KYCStatusRequestFulfilled(bytes32,address,bool)");
-        bytes32 compliantCheckPassed = keccak256("CompliantCheckPassed()");
         bytes32 approval = keccak256("Approval(address,address,uint256)");
+
+        bytes32 requestId;
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         for (uint256 i = 0; i < logs.length; i++) {
-            /// @dev handle KYCStatusRequested() event params and ghosts
-            if (logs[i].topics[0] == kycStatusRequested) {
+            /// @dev handle CompliantStatusRequested() event params and ghosts
+            if (logs[i].topics[0] == compliantStatusRequested) {
                 bytes32 emittedRequestId = logs[i].topics[1];
                 address emittedUser = address(uint160(uint256(logs[i].topics[2])));
 
                 g_requestedEventRequestId[emittedUser] = emittedRequestId;
                 g_requestedUsers[emittedUser] = true;
                 g_requestedEventsEmitted++;
+
+                requestId = emittedRequestId;
             }
 
             /// @dev handle Everest.Fulfilled() event params and ghost
@@ -354,25 +365,6 @@ contract Handler is Test {
                 g_everestFulfilledEventsEmitted++;
             }
 
-            /// @dev handle KYCStatusRequestFulfilled() event params and ghost
-            if (logs[i].topics[0] == kycStatusRequestFulfilled) {
-                bytes32 emittedRequestId = logs[i].topics[1];
-                g_compliantFulfilledEventRequestId[user] = emittedRequestId;
-
-                /// @dev if isCompliant is true, increment ghost value
-                if ((logs[i].topics[3] != bytes32(0))) {
-                    g_fulfilledRequestIsCompliant++;
-                    g_compliantFulfilledEventIsCompliant[user] = true;
-                }
-
-                g_compliantFulfilledEventsEmitted++;
-            }
-
-            /// @dev handle CompliantCheckPassed() event
-            if (logs[i].topics[0] == compliantCheckPassed) {
-                g_automatedCompliantCheckPassed++;
-            }
-
             /// @dev handle Approval() event
             if (logs[i].topics[0] == approval) {
                 address spender = address(uint160(uint256(logs[i].topics[2])));
@@ -384,6 +376,32 @@ contract Handler is Test {
                 if (spender == registry) {
                     g_lastApprovalRegistry = value;
                 }
+            }
+        }
+
+        return requestId;
+    }
+
+    function _handlePerformUpkeepLogs() internal {
+        bytes32 compliantStatusFulfilled = keccak256("CompliantStatusFulfilled(bytes32,address,address,bool)");
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        for (uint256 i = 0; i < logs.length; i++) {
+            /// @dev handle CompliantStatusFulfilled() event params and ghost
+            if (logs[i].topics[0] == compliantStatusFulfilled) {
+                bytes32 emittedRequestId = logs[i].topics[1];
+                address emittedUser = address(uint160(uint256(logs[i].topics[2])));
+                g_compliantFulfilledEventRequestId[emittedUser] = emittedRequestId;
+
+                /// @dev if isCompliant is true, increment ghost value
+                bool emittedBool = abi.decode(logs[i].data, (bool));
+                if (emittedBool) {
+                    g_fulfilledRequestIsCompliant++;
+                    g_compliantFulfilledEventIsCompliant[emittedUser] = true;
+                }
+
+                g_compliantFulfilledEventsEmitted++;
             }
         }
     }
