@@ -312,7 +312,8 @@ contract Handler is Test {
         g_linkAddedToRegistry += IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
 
         /// @dev update totalFeesEarned ghost
-        g_totalFeesEarned += compliantRouter.getFee() - IEverestConsumer(everest).oraclePayment();
+        g_totalFeesEarned +=
+            compliantRouter.getFee() - IEverestConsumer(everest).oraclePayment() - compliantRouter.getAutomationFee();
 
         /// @dev increment requests made
         g_requestsMade++;
