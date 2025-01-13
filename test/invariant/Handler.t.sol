@@ -194,27 +194,8 @@ contract Handler is Test {
         _handlePerformUpkeepLogs();
     }
 
-    // /// @dev onlyCompliant
-    // function doSomething(uint256 addressSeed) public {
-    //     address user = _createOrGetUser(addressSeed);
-    //     require(user != proxyAdmin && user != compliantProxy, "Invalid address used.");
-
-    //     if (g_requestedAddressToStatus[user]) {
-    //         vm.prank(user);
-    //         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
-    //         require(success, "delegate call in handler to doSomething() failed");
-
-    //         g_manualIncrement++;
-    //     }
-    // }
-
     /// @dev onlyOwner
-    function withdrawFees(
-        uint256 addressSeed,
-        bool isCompliant,
-        bytes calldata compliantCalldata,
-        bool isOnTokenTransfer
-    ) public {
+    function withdrawFees(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer) public {
         if (g_compliantFeesInLink == 0) {
             sendRequest(addressSeed, isCompliant, isOnTokenTransfer);
         } else {
@@ -350,6 +331,7 @@ contract Handler is Test {
                 g_requestedEventsEmitted++;
 
                 requestId = emittedRequestId;
+                requestIds.add(requestId);
             }
 
             /// @dev handle Everest.Fulfilled() event params and ghost
@@ -394,10 +376,8 @@ contract Handler is Test {
 
                 /// @dev if isCompliant is true, increment ghost value
                 bool emittedBool = abi.decode(logs[i].data, (bool));
-                if (emittedBool) {
-                    g_fulfilledRequestIsCompliant++;
-                    g_compliantFulfilledEventIsCompliant[emittedUser] = true;
-                }
+                if (emittedBool) g_fulfilledRequestIsCompliant++;
+                g_compliantFulfilledEventIsCompliant[emittedUser] = emittedBool;
 
                 g_compliantFulfilledEventsEmitted++;
             }
@@ -405,8 +385,7 @@ contract Handler is Test {
     }
 
     function _directOnTokenTransfer(address user) internal {
-        uint256 amount = compliantRouter.getFee();
-        deal(link, user, amount);
+        uint256 amount = _dealLink(user);
 
         bytes memory data = abi.encode(user, address(logic));
 
