@@ -117,6 +117,10 @@ contract Handler is Test {
     /// @dev ghost to track requestId to user
     mapping(bytes32 requestId => address user) public g_requestIdToUser;
 
+    /// @dev ghost to track CompliantLogic.NonCompliantUser events
+    /// @notice this is true if NONCompliant!
+    mapping(address emittedUser => bool isNotCompliant) public g_nonCompliantUserEvent;
+
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -364,22 +368,35 @@ contract Handler is Test {
 
     function _handlePerformUpkeepLogs() internal {
         bytes32 compliantStatusFulfilled = keccak256("CompliantStatusFulfilled(bytes32,address,address,bool)");
+        bytes32 nonCompliantUserEvent = keccak256("NonCompliantUser(address)");
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        address user;
 
         for (uint256 i = 0; i < logs.length; i++) {
             /// @dev handle CompliantStatusFulfilled() event params and ghost
             if (logs[i].topics[0] == compliantStatusFulfilled) {
                 bytes32 emittedRequestId = logs[i].topics[1];
-                address emittedUser = address(uint160(uint256(logs[i].topics[2])));
-                g_compliantFulfilledEventRequestId[emittedUser] = emittedRequestId;
+                user = address(uint160(uint256(logs[i].topics[2])));
+                g_compliantFulfilledEventRequestId[user] = emittedRequestId;
 
                 /// @dev if isCompliant is true, increment ghost value
                 bool emittedBool = abi.decode(logs[i].data, (bool));
                 if (emittedBool) g_fulfilledRequestIsCompliant++;
-                g_compliantFulfilledEventIsCompliant[emittedUser] = emittedBool;
+                g_compliantFulfilledEventIsCompliant[user] = emittedBool;
 
                 g_compliantFulfilledEventsEmitted++;
+            }
+
+            /// @dev handle CompliantLogic.NonCompliantUser() event
+            if (logs[i].topics[0] == nonCompliantUserEvent) {
+                address nonCompliantUser = address(uint160(uint256(logs[i].topics[1])));
+                require(user == nonCompliantUser, "invalid users emitted by fulfilled and nonCompliant events.");
+
+                g_nonCompliantUserEvent[user] = true;
+            } else {
+                g_nonCompliantUserEvent[user] = false;
             }
         }
     }
