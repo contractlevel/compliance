@@ -170,7 +170,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        // cannotExecute
+        cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
