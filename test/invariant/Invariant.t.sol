@@ -23,6 +23,7 @@ import {IAutomationRegistryConsumer} from
     "@chainlink/contracts/src/v0.8/automation/interfaces/IAutomationRegistryConsumer.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {LogicWrapperRevert} from ".././wrappers/LogicWrapperRevert.sol";
 
 contract Invariant is StdInvariant, BaseTest {
     /*//////////////////////////////////////////////////////////////
@@ -33,6 +34,8 @@ contract Invariant is StdInvariant, BaseTest {
 
     /// @dev contract handling calls to Compliant
     Handler internal handler;
+    /// @dev passed to handler as example of reverting logic implementation
+    LogicWrapperRevert internal logicRevert;
 
     /*//////////////////////////////////////////////////////////////
                                  SETUP
@@ -94,6 +97,7 @@ contract Invariant is StdInvariant, BaseTest {
 
         /// @dev deploy CompliantLogic implementation
         logic = new LogicWrapper(address(compliantProxy));
+        logicRevert = new LogicWrapperRevert(address(compliantProxy));
 
         //-----------------------------------------------------------------------------------------------
 
@@ -108,7 +112,8 @@ contract Invariant is StdInvariant, BaseTest {
             address(proxyAdmin),
             registry,
             upkeepId,
-            logic
+            logic,
+            logicRevert
         );
 
         /// @dev define appropriate function selectors
@@ -401,4 +406,9 @@ contract Invariant is StdInvariant, BaseTest {
             "Invariant violated: NonCompliantUser event should only be emitted when user is non compliant."
         );
     }
+
+    // we want to assert that our performUpkeep is always a success when the logic implementation reverts
 }
+
+// CompliantLogicExecutionFailed
+// will probably need a bool isLogic passed to everywhere address(logic) is
