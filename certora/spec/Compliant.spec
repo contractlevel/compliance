@@ -42,6 +42,7 @@ methods {
 /*//////////////////////////////////////////////////////////////
                           DEFINITIONS
 //////////////////////////////////////////////////////////////*/
+/// @notice external functions that change state
 definition canChangeState(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
 	f.selector == sig:requestKycStatus(address,address).selector ||
@@ -49,6 +50,7 @@ definition canChangeState(method f) returns bool =
     f.selector == sig:withdrawFees().selector ||
     f.selector == sig:initialize(address).selector;
 
+/// @notice external functions that can be called to make request
 definition canRequestStatus(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
 	f.selector == sig:requestKycStatus(address,address).selector;
