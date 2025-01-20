@@ -2,7 +2,6 @@
 pragma solidity 0.8.24;
 
 import {CompliantLogic} from "../../src/CompliantLogic.sol";
-import {console2} from "forge-std/Test.sol";
 
 contract LogicWrapperRevert is CompliantLogic {
     /*//////////////////////////////////////////////////////////////
