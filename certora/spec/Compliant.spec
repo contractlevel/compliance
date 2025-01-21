@@ -84,11 +84,6 @@ persistent ghost mathint g_totalFeesWithdrawn {
     init_state axiom g_totalFeesWithdrawn == 0;
 }
 
-/// @notice track address to isPendingRequest
-persistent ghost mapping(address => bool) g_pendingRequests {
-    init_state axiom forall address a. g_pendingRequests[a] == false;
-}
-
 /// @notice track the compliant restricted logic's incremented value 
 ghost mathint g_incrementedValue {
     init_state axiom g_incrementedValue == 0;
@@ -100,7 +95,7 @@ ghost mathint g_compliantStatusRequestedEvents {
 }
 
 /// @notice track CompliantStatusFulfilled() event emissions
-persistent ghost mathint g_compliantStatusFulfilledEvents {
+ghost mathint g_compliantStatusFulfilledEvents {
     init_state axiom g_compliantStatusFulfilledEvents == 0;
 }
 
@@ -114,6 +109,7 @@ ghost mathint g_nonCompliantUserEvents {
     init_state axiom g_nonCompliantUserEvents == 0;
 }
 
+// review - not using this in any rules
 /// @notice track isCompliant bool emitted by CompliantStatusFulfilled()
 ghost bool g_fulfilledRequestIsCompliant {
     init_state axiom g_fulfilledRequestIsCompliant == false;
@@ -462,3 +458,5 @@ rule compliantLogic_does_not_execute_for_nonCompliantUser() {
     assert valueBefore == valueAfter;
     assert ghostBefore == ghostAfter;
 }
+
+// g_fulfilledRequestIsCompliant - ghost bool that is true if fulfilled request isCompliant
