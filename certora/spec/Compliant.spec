@@ -109,12 +109,6 @@ ghost mathint g_nonCompliantUserEvents {
     init_state axiom g_nonCompliantUserEvents == 0;
 }
 
-// review - not using this in any rules
-/// @notice track isCompliant bool emitted by CompliantStatusFulfilled()
-ghost bool g_fulfilledRequestIsCompliant {
-    init_state axiom g_fulfilledRequestIsCompliant == false;
-}
-
 /*//////////////////////////////////////////////////////////////
                              HOOKS
 //////////////////////////////////////////////////////////////*/
@@ -131,7 +125,6 @@ hook Sstore logic.s_incrementedValue uint256 newValue (uint256 oldValue) {
 
 /// @notice increment g_compliantStatusRequestedEvents when CompliantStatusRequested() emitted
 /// @notice increment g_compliantStatusFulfilledEvents when CompliantStatusFulfilled() emitted
-/// @notice set g_fulfilledRequestIsCompliant to true when fulfilled event isCompliant
 /// @notice increment g_compliantLogicExecutionFailedEvents when CompliantLogicExecutionFailed() emitted
 hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 t3) {
     if (t0 == CompliantStatusRequestedEvent())
@@ -139,9 +132,6 @@ hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 
 
     if (t0 == CompliantStatusFulfilledEvent()) 
         g_compliantStatusFulfilledEvents = g_compliantStatusFulfilledEvents + 1;
-
-    if (t0 == CompliantStatusFulfilledEvent() && t3 != to_bytes32(0)) 
-        g_fulfilledRequestIsCompliant = true;
 
     if (t0 == CompliantLogicExecutionFailedEvent())
         g_compliantLogicExecutionFailedEvents = g_compliantLogicExecutionFailedEvents + 1;
@@ -458,5 +448,3 @@ rule compliantLogic_does_not_execute_for_nonCompliantUser() {
     assert valueBefore == valueAfter;
     assert ghostBefore == ghostAfter;
 }
-
-// g_fulfilledRequestIsCompliant - ghost bool that is true if fulfilled request isCompliant
