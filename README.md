@@ -18,9 +18,7 @@ This project demonstrates a framework for implementing compliance in smart contr
   - [Formal Verification](#formal-verification)
   - [Deployment](#deployment)
     - [CompliantRouter](#compliantrouter)
-      - [Deployed by contractlevel.com team](#deployed-by-contractlevelcom-team)
     - [CompliantLogic](#compliantlogic)
-      - [Deployed by user](#deployed-by-user)
   - [Additional Comments](#additional-comments)
   - [Disclaimer](#disclaimer)
   - [Archives](#archives)
@@ -109,7 +107,7 @@ certoraRun ./certora/conf/Compliant.conf
 ## Deployment
 
 ### CompliantRouter
-####  Deployed by contractlevel.com team
+*Deployed by contractlevel.com team*
 
 This contract uses a `TransparentUpgradeableProxy` (`CompliantProxy`) to store Chainlink Automation `forwarder` and `upkeepId` as immutable, saving gas for the end user. These are the deployment steps to ensure this functionality and immutability of the `Compliant` contract:
 
@@ -121,7 +119,7 @@ This contract uses a `TransparentUpgradeableProxy` (`CompliantProxy`) to store C
 - renounceOwnership of CompliantProxy's `ProxyAdmin` Admin, ensuring the implementation cannot be changed again
 
 ### CompliantLogic
-#### Deployed by user
+*Deployed by user*
 
 Pass the `CompliantRouter` (`CompliantProxy`) address in the constructor.
 
