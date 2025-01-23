@@ -1,6 +1,6 @@
 # Contract Level Compliance
 
-This project demonstrates a framework for implementing compliance in smart contracts. The two key contracts in this system are `CompliantRouter` and `CompliantLogic`. The `CompliantRouter` contract can be interacted with to request the KYC status of an address and automatically route the result to a client-defined implementation of the `CompliantLogic` contract.
+This project provides a framework for implementing compliance in smart contracts. The two key contracts in this system are `CompliantRouter` and `CompliantLogic`. The `CompliantRouter` contract can be interacted with to request the KYC status of an address and automatically route the result to a client-defined implementation of the `CompliantLogic` contract.
 
 ## Table of Contents
 
