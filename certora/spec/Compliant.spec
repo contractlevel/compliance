@@ -25,6 +25,7 @@ methods {
     function owner() external returns (address) envfree;
     function getEverestFee() external returns (uint256) envfree;
     function getAutomationFee() external returns (uint96) envfree;
+    function getLatestPrice() external returns (uint256) envfree;
 
     // External contract functions
     function everest.oraclePayment() external returns (uint256) envfree;
@@ -36,7 +37,6 @@ methods {
     // Wildcard dispatcher summaries
     function _.compliantLogic(address,bool) external => DISPATCHER(true);
     function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
-    // function _.supportsInterface(bytes4 interfaceId) external => supportsInterfaceSummary(interfaceId) expect bool;
 
     // Harness helper functions
     function onTokenTransferData(address,address) external returns (bytes) envfree;
@@ -77,14 +77,11 @@ definition NonCompliantUserEvent() returns bytes32 =
 // keccak256(abi.encodePacked("NonCompliantUser(address)"))
     to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
 
-/*//////////////////////////////////////////////////////////////
-                           FUNCTIONS
-//////////////////////////////////////////////////////////////*/
-/// @notice summarize supportsInterface()
-function supportsInterfaceSummary(bytes4 interfaceId) returns bool {
-    env e;
-    return logic.supportsInterface(e, interfaceId);
-}
+/// @notice 1e18
+definition WAD_PRECISION() returns uint256 = 1000000000000000000;
+
+/// @notice 5e7 (50c in PriceFeed decimals)
+definition COMPLIANT_FEE_PRECISION() returns uint256 = 50000000;
 
 /*//////////////////////////////////////////////////////////////
                              GHOSTS
@@ -534,4 +531,11 @@ rule requestKycStatus_revertsWhen_logicIncompatible() {
 
     requestKycStatus@withrevert(e, user, nonLogic);
     assert lastReverted;
+}
+
+/// @notice calculation for protocol fee should be equal to 50c/LINK
+rule compliantFeeCalculation {
+    mathint fee = getCompliantFee();
+    mathint expectedFee = (WAD_PRECISION() * COMPLIANT_FEE_PRECISION()) / getLatestPrice();
+    assert fee == expectedFee;
 }

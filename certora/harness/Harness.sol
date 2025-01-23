@@ -28,4 +28,9 @@ contract Harness is CompliantRouter {
         bytes32 requestId = bytes32(uint256(uint160(user)));
         return abi.encode(requestId, user, logic, isCompliant);
     }
+
+    /// @dev wrapper for _getLatestPrice() internal
+    function getLatestPrice() external returns (uint256) {
+        return _getLatestPrice();
+    }
 }
