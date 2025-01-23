@@ -17,7 +17,7 @@ contract LogicWrapperRevert is CompliantLogic {
     /*//////////////////////////////////////////////////////////////
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
-    function _compliantLogic(address user) internal override {
+    function _compliantLogic(address user) internal pure override {
         revert LogicWrapperRevert__Error();
     }
 }
