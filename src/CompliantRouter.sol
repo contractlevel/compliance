@@ -126,7 +126,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /*//////////////////////////////////////////////////////////////
                                 EXTERNAL
     //////////////////////////////////////////////////////////////*/
-    /// @notice transferAndCall LINK to this address to skip executing 2 txs with approve and requestKycStatus
+    /// @notice transferAndCall LINK to address(this) to skip executing 2 txs with approve and requestKycStatus
     /// @param amount fee to pay for the request - get it from getFee()
     /// @param data encoded data should contain the user address to request the kyc status of and the address of the
     /// CompliantLogic contract to call with fulfilled result

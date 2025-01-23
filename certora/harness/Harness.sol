@@ -5,6 +5,7 @@ import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {IEverestConsumer} from "lib/everest-chainlink-consumer/contracts/EverestConsumer.sol";
 import {LogicWrapper} from "../../test/wrappers/LogicWrapper.sol";
 import {LogicWrapperRevert} from "../..//test/wrappers/LogicWrapperRevert.sol";
+import {ICompliantLogic} from "../../src/interfaces/ICompliantLogic.sol";
 
 contract Harness is CompliantRouter {
     /*//////////////////////////////////////////////////////////////

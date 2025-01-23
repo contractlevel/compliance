@@ -5,6 +5,7 @@ using MockForwarder as forwarder;
 using MockAutomationRegistry as registry;
 using ERC677 as link;
 using LogicHarness as logic;
+using NonLogic as nonLogic;
 
 /*//////////////////////////////////////////////////////////////
                             METHODS
@@ -15,22 +16,27 @@ methods {
     function getPendingRequest(bytes32) external returns(CompliantRouter.PendingRequest) envfree;
     function getEverest() external returns(address) envfree;
     function getIsCompliant(address) external returns (bool) envfree;
+    function getIsCompliantLogic(address) external returns (bool) envfree;
     function getLink() external returns (address) envfree;
     function getFee() external returns (uint256) envfree;
     function getCompliantFee() external returns (uint256) envfree;
     function getForwarder() external returns (address) envfree;
     function getUpkeepId() external returns (uint256) envfree;
     function owner() external returns (address) envfree;
+    function getEverestFee() external returns (uint256) envfree;
+    function getAutomationFee() external returns (uint96) envfree;
 
     // External contract functions
-    function everest.getLatestFulfilledRequest(address) external returns (IEverestConsumer.Request);
     function everest.oraclePayment() external returns (uint256) envfree;
     function forwarder.getRegistry() external returns (address) envfree;
     function registry.getMinBalance(uint256) external returns (uint96) envfree;
     function link.balanceOf(address) external returns (uint256) envfree;
+    function link.allowance(address,address) external returns (uint256) envfree;
 
-    // Wildcard dispatcher summary
+    // Wildcard dispatcher summaries
     function _.compliantLogic(address,bool) external => DISPATCHER(true);
+    function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
+    // function _.supportsInterface(bytes4 interfaceId) external => supportsInterfaceSummary(interfaceId) expect bool;
 
     // Harness helper functions
     function onTokenTransferData(address,address) external returns (bytes) envfree;
@@ -70,6 +76,15 @@ definition CompliantLogicExecutionFailedEvent() returns bytes32 =
 definition NonCompliantUserEvent() returns bytes32 =
 // keccak256(abi.encodePacked("NonCompliantUser(address)"))
     to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
+
+/*//////////////////////////////////////////////////////////////
+                           FUNCTIONS
+//////////////////////////////////////////////////////////////*/
+/// @notice summarize supportsInterface()
+function supportsInterfaceSummary(bytes4 interfaceId) returns bool {
+    env e;
+    return logic.supportsInterface(e, interfaceId);
+}
 
 /*//////////////////////////////////////////////////////////////
                              GHOSTS
@@ -179,11 +194,9 @@ rule onTokenTransfer_revertsWhen_notLink() {
 rule onTokenTransfer_revertsWhen_insufficientFee() {
     env e;
     address user;
-    address logicAddr;
     uint256 amount;
     bytes arbitraryData;
-    bytes data;
-    require data == onTokenTransferData(user, logicAddr);
+    bytes data = onTokenTransferData(user, logic);
 
     require amount < getFee();
 
@@ -447,4 +460,78 @@ rule compliantLogic_does_not_execute_for_nonCompliantUser() {
 
     assert valueBefore == valueAfter;
     assert ghostBefore == ghostAfter;
+}
+
+/// @notice onTokenTransfer should revert if passed logic address does not implement expected interface
+rule onTokenTransfer_revertsWhen_logicIncompatible() {
+    env e;
+    address user;
+    uint256 amount;
+    bytes data = onTokenTransferData(user, nonLogic);
+    require amount >= getFee();
+    require e.msg.sender == getLink();
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() < max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) >= amount;
+
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert lastReverted;
+}
+
+/// @notice onTokenTransfer should not revert under correct conditions
+rule onTokenTransfer_noRevert() {
+    env e;
+    address user;
+    uint256 amount;
+    bytes data = onTokenTransferData(user, logic);
+    require amount >= getFee();
+    require e.msg.sender == getLink();
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) >= amount;
+
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert !lastReverted;
+}
+
+/// @notice requestKycStatus should not revert under correct conditions
+rule requestKycStatus_noRevert() {
+    env e;
+    address user;
+    require e.msg.value == 0;
+    require e.msg.sender != registry;
+    require e.msg.sender != everest;
+    require e.msg.sender != 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) <= max_uint - getFee();
+    require link.balanceOf(e.msg.sender) >= getFee();
+    require link.allowance(e.msg.sender, currentContract) >= getFee();
+
+    requestKycStatus@withrevert(e, user, logic);
+    assert !lastReverted;
+}
+
+/// @notice requestKycStatus should revert when passed logic address does not implement expected interface
+rule requestKycStatus_revertsWhen_logicIncompatible() {
+    env e;
+    address user;
+    require e.msg.value == 0;
+    require e.msg.sender != registry;
+    require e.msg.sender != everest;
+    require e.msg.sender != 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) <= max_uint - getFee();
+    require link.balanceOf(e.msg.sender) >= getFee();
+    require link.allowance(e.msg.sender, currentContract) >= getFee();
+
+    requestKycStatus@withrevert(e, user, nonLogic);
+    assert lastReverted;
 }
