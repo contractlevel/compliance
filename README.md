@@ -67,7 +67,7 @@ This fee is intended as payment for the Owner of the `CompliantRouter` contract.
 
 ### Everest Fee
 
-This fee is required to pay for requests made to Everest's Chainlink node.
+This fee is required to pay for requests made to the Everest Chainlink node.
 
 ### Automation Fee
 
