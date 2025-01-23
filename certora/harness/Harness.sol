@@ -1,34 +1,36 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Compliant} from "../../src/Compliant.sol";
+import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {IEverestConsumer} from "lib/everest-chainlink-consumer/contracts/EverestConsumer.sol";
-import {LibZip} from "@solady/src/utils/LibZip.sol";
+import {LogicWrapper} from "../../test/wrappers/LogicWrapper.sol";
+import {LogicWrapperRevert} from "../..//test/wrappers/LogicWrapperRevert.sol";
+import {ICompliantLogic} from "../../src/interfaces/ICompliantLogic.sol";
 
-contract Harness is Compliant {
+contract Harness is CompliantRouter {
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
     constructor(address everest, address link, address linkUsdFeed, address forwarder, uint256 upkeepId, address proxy)
-        Compliant(everest, link, linkUsdFeed, forwarder, upkeepId, proxy)
+    CompliantRouter(everest, link, linkUsdFeed, forwarder, upkeepId, proxy)
     {}
 
     /*//////////////////////////////////////////////////////////////
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
-    /// @dev create data to pass to onTokenTransfer with Automation
-    function isAutomation(address user, bytes memory compliantCalldata) external returns (bytes memory) {
-        return abi.encode(user, true, compliantCalldata);
-    }
-
-    /// @dev create data to pass to onTokenTransfer with no Automation
-    function noAutomation(address user, bytes memory compliantCalldata) external returns (bytes memory) {
-        return abi.encode(user, false, compliantCalldata);
+    /// @dev create data to pass to onTokenTransfer
+    function onTokenTransferData(address user, address logic) external returns (bytes memory) {
+        return abi.encode(user, logic);
     }
 
     /// @dev create performData to pass to performUpkeep
-    function performData(address user, bool isCompliant) external returns (bytes memory) {
+    function performData(address user, address logic, bool isCompliant) external returns (bytes memory) {
         bytes32 requestId = bytes32(uint256(uint160(user)));
-        return abi.encode(requestId, user, isCompliant);
+        return abi.encode(requestId, user, logic, isCompliant);
+    }
+
+    /// @dev wrapper for _getLatestPrice() internal
+    function getLatestPrice() external returns (uint256) {
+        return _getLatestPrice();
     }
 }

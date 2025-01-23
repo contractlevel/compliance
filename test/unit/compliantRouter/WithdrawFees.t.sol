@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.24;
 
-import {BaseTest, LinkTokenInterface, console2} from "../BaseTest.t.sol";
+import {BaseTest, LinkTokenInterface, console2} from "../../BaseTest.t.sol";
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 
 contract WithdrawFeesTest is BaseTest {
@@ -12,7 +12,7 @@ contract WithdrawFeesTest is BaseTest {
     function setUp() public override {
         BaseTest.setUp();
 
-        uint256 approvalAmount = compliant.getFee();
+        uint256 approvalAmount = compliantRouter.getFee();
 
         vm.prank(user);
         LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
@@ -25,11 +25,11 @@ contract WithdrawFeesTest is BaseTest {
         /// @dev call requestKycStatus as user to generate fees
         vm.prank(user);
         (, bytes memory feeRetData) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, false, "")
-        ); // false for no automation
+            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+        );
         uint256 fee = abi.decode(feeRetData, (uint256));
 
-        uint256 compliantFee = fee - IEverestConsumer(address(everest)).oraclePayment();
+        uint256 compliantFee = fee - compliantRouter.getEverestFee() - compliantRouter.getAutomationFee();
 
         uint256 balanceBefore = LinkTokenInterface(link).balanceOf(owner);
 
@@ -62,7 +62,7 @@ contract WithdrawFeesTest is BaseTest {
 
     function test_compliant_withdrawFees_revertsWhen_notProxy() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyProxy()"));
-        compliant.withdrawFees();
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyProxy()"));
+        compliantRouter.withdrawFees();
     }
 }

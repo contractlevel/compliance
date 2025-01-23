@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {console2} from "forge-std/Test.sol";
 import {Handler} from "./Handler.t.sol";
-import {Compliant} from "../../src/Compliant.sol";
+import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {
     BaseTest,
     Vm,
@@ -15,13 +15,15 @@ import {
     CompliantProxy,
     ProxyAdmin,
     ITransparentUpgradeableProxy,
-    MockAutomationRegistry
+    MockAutomationRegistry,
+    LogicWrapper
 } from "../BaseTest.t.sol";
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 import {IAutomationRegistryConsumer} from
     "@chainlink/contracts/src/v0.8/automation/interfaces/IAutomationRegistryConsumer.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {LogicWrapperRevert} from ".././wrappers/LogicWrapperRevert.sol";
 
 contract Invariant is StdInvariant, BaseTest {
     /*//////////////////////////////////////////////////////////////
@@ -32,6 +34,8 @@ contract Invariant is StdInvariant, BaseTest {
 
     /// @dev contract handling calls to Compliant
     Handler internal handler;
+    /// @dev passed to handler as example of reverting logic implementation
+    LogicWrapperRevert internal logicRevert;
 
     /*//////////////////////////////////////////////////////////////
                                  SETUP
@@ -67,13 +71,14 @@ contract Invariant is StdInvariant, BaseTest {
 
         /// @dev deploy Compliant
         vm.prank(deployer);
-        compliant = new Compliant(address(everest), link, linkUsdFeed, forwarder, upkeepId, address(compliantProxy));
+        compliantRouter =
+            new CompliantRouter(address(everest), link, linkUsdFeed, forwarder, upkeepId, address(compliantProxy));
 
         /// @dev upgradeToAndCall - set Compliant to new implementation and initialize deployer to owner
         bytes memory initializeData = abi.encodeWithSignature("initialize(address)", deployer);
         vm.prank(proxyDeployer);
         ProxyAdmin(proxyAdmin).upgradeAndCall(
-            ITransparentUpgradeableProxy(address(compliantProxy)), address(compliant), initializeData
+            ITransparentUpgradeableProxy(address(compliantProxy)), address(compliantRouter), initializeData
         );
 
         /// @dev set CompliantProxyAdmin to address(0) - making its last upgrade final and immutable
@@ -90,9 +95,15 @@ contract Invariant is StdInvariant, BaseTest {
 
         //-----------------------------------------------------------------------------------------------
 
+        /// @dev deploy CompliantLogic implementation
+        logic = new LogicWrapper(address(compliantProxy));
+        logicRevert = new LogicWrapperRevert(address(compliantProxy));
+
+        //-----------------------------------------------------------------------------------------------
+
         /// @dev deploy handler
         handler = new Handler(
-            compliant,
+            compliantRouter,
             address(compliantProxy),
             deployer,
             link,
@@ -100,16 +111,17 @@ contract Invariant is StdInvariant, BaseTest {
             address(everest),
             address(proxyAdmin),
             registry,
-            upkeepId
+            upkeepId,
+            logic,
+            logicRevert
         );
 
         /// @dev define appropriate function selectors
-        bytes4[] memory selectors = new bytes4[](5);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = Handler.sendRequest.selector;
-        selectors[1] = Handler.doSomething.selector;
-        selectors[2] = Handler.withdrawFees.selector;
-        selectors[3] = Handler.externalImplementationCalls.selector;
-        selectors[4] = Handler.changeFeeVariables.selector;
+        selectors[1] = Handler.externalImplementationCalls.selector;
+        selectors[2] = Handler.changeFeeVariables.selector;
+        selectors[3] = Handler.withdrawFees.selector;
 
         /// @dev target handler and appropriate function selectors
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
@@ -143,17 +155,17 @@ contract Invariant is StdInvariant, BaseTest {
     // Pending Request Management:
     /// @dev pending requests should only be true whilst waiting for Chainlink Automation to be fulfilled
     function invariant_pendingRequest() public {
-        handler.forEachUser(this.checkPendingRequestForUser);
+        handler.forEachRequestId(this.checkPendingStatusForRequestId);
     }
 
-    function checkPendingRequestForUser(address user) external {
+    function checkPendingStatusForRequestId(bytes32 requestId) external {
         (, bytes memory retData) =
-            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
-        Compliant.PendingRequest memory request = abi.decode(retData, (Compliant.PendingRequest));
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
+        CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
 
         assertEq(
             request.isPending,
-            handler.g_pendingRequests(user),
+            handler.g_pendingRequests(requestId),
             "Invariant violated: Pending request should only be true whilst waiting for Chainlink Automation to be fulfilled."
         );
     }
@@ -192,29 +204,14 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     // Fee Calculation:
-    /// @dev the fee for KYC requests should always be the sum of _calculateCompliantFee() + i_everest.oraclePayment().
-    function invariant_feeCalculation_noAutomation() public {
+    /// @dev the fee for requests should always be the sum of compliantFee, everestFee and upkeep minBalance.
+    function invariant_feeCalculation() public {
         (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getFee()"));
         uint256 fee = abi.decode(retData, (uint256));
 
         uint256 oraclePayment = IEverestConsumer(address(everest)).oraclePayment();
-        uint256 expectedFee = oraclePayment + compliant.getCompliantFee();
-
-        assertEq(
-            fee,
-            expectedFee,
-            "Invariant violated: Fee for a standard request should always be equal to Compliant and Everest fee."
-        );
-    }
-
-    /// @dev the fee for automated requests should always be the sum of compliantFee, everestFee and upkeep minBalance.
-    function invariant_feeCalculation_withAutomation() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getFeeWithAutomation()"));
-        uint256 fee = abi.decode(retData, (uint256));
-
-        uint256 oraclePayment = IEverestConsumer(address(everest)).oraclePayment();
         uint256 minBalance = IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
-        uint256 expectedFee = oraclePayment + minBalance + compliant.getCompliantFee();
+        uint256 expectedFee = oraclePayment + minBalance + compliantRouter.getCompliantFee();
 
         assertEq(
             fee,
@@ -223,62 +220,15 @@ contract Invariant is StdInvariant, BaseTest {
         );
     }
 
-    // Compliance Logic:
-    /// @dev only compliant users can call compliant restricted logic
-    function invariant_compliantLogic_manualExecution() public {
-        handler.forEachUser(this.checkDoSomethingLogic);
-    }
-
-    function checkDoSomethingLogic(address user) external {
-        /// @dev fetch user's compliant status and manually call compliant restricted logic
-        IEverestConsumer.Request memory request = IEverestConsumer(address(everest)).getLatestFulfilledRequest(user);
-        vm.prank(user);
-        (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
-
-        /// @dev assert conditional invariant
-        if (success) {
-            assertTrue(
-                request.isKYCUser,
-                "Invariant violated: Only users who completed Everest KYC should be able to manually execute compliant logic."
-            );
-        } else {
-            assertFalse(
-                request.isKYCUser,
-                "Invariant violated: Users who have not completed Everest KYC should not be able to execute compliant logic."
-            );
-        }
-    }
-
-    /// @dev assert manually executed compliant restricted logic changes state correctly
-    function invariant_compliantLogic_stateChange_manualExecution() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getIncrementedValue()"));
-        uint256 incrementedValue = abi.decode(retData, (uint256));
-
-        assertEq(
-            incrementedValue,
-            handler.g_manualIncrement(),
-            "Invariant violated: Manually executed Compliant restricted logic state change should be consistent."
-        );
-    }
-
+    // Compliant Logic:
     /// @dev assert automated compliant restricted logic changes state correctly
-    function invariant_compliantLogic_stateChange_withAutomation() public {
-        (, bytes memory retData) = address(compliantProxy).call(abi.encodeWithSignature("getAutomatedIncrement()"));
-        uint256 incrementedValue = abi.decode(retData, (uint256));
+    function invariant_compliantLogic_stateChange() public view {
+        uint256 incrementedValue = logic.getIncrementedValue();
 
         assertEq(
             incrementedValue,
-            handler.g_automationIncrement(),
-            "Invariant violated: Automated Compliant restricted logic state change should be consistent."
-        );
-    }
-
-    /// @dev check that CompliantCheckPassed() event is emitted everytime a fulfilled request isCompliant
-    function invariant_compliantLogic_withAutomation_events() public view {
-        assertEq(
-            handler.g_fulfilledRequestIsCompliant(),
-            handler.g_automatedCompliantCheckPassed(),
-            "Invariant violated: If fulfilled request is compliant, automated Compliant restricted logic should be accessed."
+            handler.g_incrementedValue(),
+            "Invariant violated: Compliant restricted logic state change should be consistent."
         );
     }
 
@@ -290,7 +240,7 @@ contract Invariant is StdInvariant, BaseTest {
 
     function checkForwarderCanCallPerformUpkeep(address user) external {
         bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes memory performData = abi.encode(requestId, user, true);
+        bytes memory performData = abi.encode(requestId, user, address(logic), true);
 
         vm.prank(forwarder);
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
@@ -303,28 +253,28 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     // Event Consistency:
-    /// @dev assert KYCStatusRequested event is emitted for every request
-    function invariant_eventConsistency_kycStatusRequested() public view {
+    /// @dev assert CompliantStatusRequested event is emitted for every request
+    function invariant_eventConsistency_compliantStatusRequested() public view {
         assertEq(
             handler.g_requestedEventsEmitted(),
             handler.g_requestsMade(),
-            "Invariant violated: A KYCStatusRequested event should be emitted for every request."
+            "Invariant violated: A CompliantStatusRequested event should be emitted for every request."
         );
     }
 
-    /// @dev every KYC status request emits a KYCStatusRequested event with the correct everestRequestId and user.
-    function invariant_eventConsistency_kycStatusRequested_requestId() public {
-        handler.forEachUser(this.checkKYCStatusRequestedEvent);
+    /// @dev every KYC status request emits a CompliantStatusRequested event with the correct everestRequestId and user.
+    function invariant_eventConsistency_compliantStatusRequested_requestId() public {
+        handler.forEachUser(this.checkCompliantStatusRequestedEvent);
     }
 
-    function checkKYCStatusRequestedEvent(address user) external view {
+    function checkCompliantStatusRequestedEvent(address user) external view {
         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
 
         if (handler.g_requestedUsers(user)) {
             assertEq(
                 expectedRequestId,
                 handler.g_requestedEventRequestId(user),
-                "Invariant violated: KYCStatusRequested event params should emit correct requestId and user."
+                "Invariant violated: CompliantStatusRequested event params should emit correct requestId and user."
             );
         } else {
             assertEq(
@@ -335,31 +285,30 @@ contract Invariant is StdInvariant, BaseTest {
         }
     }
 
-    /// @dev assert KYCStatusRequestFulfilled event emitted for fulfilled *AUTOMATED* requests
-    function invariant_eventConsistency_kycStatusRequestFulfilled() public view {
+    /// @dev assert CompliantStatusFulfilled event emitted for fulfilled requests
+    function invariant_eventConsistency_compliantStatusFulfilled() public view {
         assertEq(
             handler.g_compliantFulfilledEventsEmitted(),
             handler.g_requestsFulfilled(),
-            "Invariant violated: A KYCStatusFulfilled event should be emitted for every request fulfilled."
+            "Invariant violated: A CompliantStatusFulfilled event should be emitted for every request fulfilled."
         );
     }
 
-    /// @dev KYCStatusRequestFulfilled event should emit the correct isCompliant status
-    function invariant_eventConsistency_kycStatusRequestFulfilled_isCompliant() public {
+    /// @dev CompliantStatusFulfilled event should emit the correct isCompliant status
+    function invariant_eventConsistency_compliantStatusFulfilled_isCompliant() public {
         handler.forEachUser(this.checkFulfilledRequestEventsCompliantStatus);
     }
 
     function checkFulfilledRequestEventsCompliantStatus(address user) external view {
-        if (handler.g_compliantFulfilledEventIsCompliant(user) && handler.g_requestedAddressToStatus(user)) {
-            assertTrue(
-                handler.g_everestFulfilledEventIsCompliant(user),
-                "Invariant violated: Compliant status should be the same in automated Compliant Fulfilled event as Everest Fulfilled."
-            );
-        }
+        assertEq(
+            handler.g_compliantFulfilledEventIsCompliant(user),
+            handler.g_everestFulfilledEventIsCompliant(user),
+            "Invariant violated: Compliant status should be the same in Compliant Fulfilled event as Everest Fulfilled."
+        );
     }
 
-    /// @dev KYCStatusRequestFulfilled event should emit the correct requestId
-    function invariant_eventConsistency_kycStatusRequestFulfilled_requestId() public {
+    /// @dev CompliantStatusFulfilled event should emit the correct requestId
+    function invariant_eventConsistency_compliantStatusFulfilled_requestId() public {
         handler.forEachUser(this.checkFulfilledRequestEventsRequestId);
     }
 
@@ -432,32 +381,6 @@ contract Invariant is StdInvariant, BaseTest {
         assertFalse(success, "Invariant violated: Initialize should not be callable a second time.");
     }
 
-    // Compliant Calldata:
-    /// @dev compliant calldata stored for user should only be there whilst request is pending
-    function invariant_compliantCalldata_storedCorrectly() public {
-        handler.forEachUser(this.checkCompliantCalldata);
-    }
-
-    function checkCompliantCalldata(address user) external {
-        (, bytes memory retData) =
-            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(address)", user));
-        Compliant.PendingRequest memory request = abi.decode(retData, (Compliant.PendingRequest));
-
-        if (request.isPending) {
-            assertEq(
-                request.compliantCalldata,
-                handler.g_requestedAddressToCalldata(user),
-                "Invariant violated: Compliant calldata mapped to user should be consistent when request is pending."
-            );
-        } else {
-            assertEq(
-                request.compliantCalldata,
-                "",
-                "Invariant violated: Compliant calldata should be not be stored when request is not pending."
-            );
-        }
-    }
-
     // Upkeep Execution:
     /// @dev Automation-related requests should add funds to the Chainlink registry via registry.addFunds
     function invariant_requests_withAutomation_addFundsToRegistry() public view {
@@ -470,4 +393,22 @@ contract Invariant is StdInvariant, BaseTest {
 
     //  NOTE: THIS WOULD REQUIRE LOCAL CHAINLINK AUTOMATION SIMULATOR
     //  performUpkeep should only process requests where checkLog indicates that upkeepNeeded is true.
+
+    // CompliantLogic Event Consistency:
+    /// @dev NonCompliantUser should be emitted everytime user is not compliant
+    function invariant_eventConsistency_nonCompliant_emitsForNonCompliant() public {
+        handler.forEachUser(this.checkNonCompliantUserEvent);
+    }
+
+    function checkNonCompliantUserEvent(address user) external view {
+        assertFalse(
+            handler.g_compliantFulfilledEventIsCompliant(user) == handler.g_nonCompliantUserEvent(user),
+            "Invariant violated: NonCompliantUser event should only be emitted when user is non compliant."
+        );
+    }
+
+    // we want to assert that our performUpkeep is always a success when the logic implementation reverts
 }
+
+// CompliantLogicExecutionFailed
+// will probably need a bool isLogic passed to everywhere address(logic) is

@@ -1,9 +1,11 @@
-// Verification of Compliant
+// Verification of CompliantRouter
 
 using MockEverestConsumer as everest;
 using MockForwarder as forwarder;
 using MockAutomationRegistry as registry;
 using ERC677 as link;
+using LogicHarness as logic;
+using NonLogic as nonLogic;
 
 /*//////////////////////////////////////////////////////////////
                             METHODS
@@ -11,70 +13,75 @@ using ERC677 as link;
 methods {
     function getProxy() external returns(address) envfree;
     function getCompliantFeesToWithdraw() external returns(uint256) envfree;
-    function getPendingRequest(address) external returns(Compliant.PendingRequest) envfree;
+    function getPendingRequest(bytes32) external returns(CompliantRouter.PendingRequest) envfree;
     function getEverest() external returns(address) envfree;
     function getIsCompliant(address) external returns (bool) envfree;
+    function getIsCompliantLogic(address) external returns (bool) envfree;
     function getLink() external returns (address) envfree;
     function getFee() external returns (uint256) envfree;
     function getCompliantFee() external returns (uint256) envfree;
     function getForwarder() external returns (address) envfree;
-    function getFeeWithAutomation() external returns (uint256) envfree;
     function getUpkeepId() external returns (uint256) envfree;
     function owner() external returns (address) envfree;
+    function getEverestFee() external returns (uint256) envfree;
+    function getAutomationFee() external returns (uint96) envfree;
+    function getLatestPrice() external returns (uint256) envfree;
 
     // External contract functions
-    function everest.getLatestFulfilledRequest(address) external returns (IEverestConsumer.Request);
     function everest.oraclePayment() external returns (uint256) envfree;
     function forwarder.getRegistry() external returns (address) envfree;
     function registry.getMinBalance(uint256) external returns (uint96) envfree;
     function link.balanceOf(address) external returns (uint256) envfree;
+    function link.allowance(address,address) external returns (uint256) envfree;
+
+    // Wildcard dispatcher summaries
+    function _.compliantLogic(address,bool) external => DISPATCHER(true);
+    function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
 
     // Harness helper functions
-    function isAutomation(address,bytes) external returns (bytes) envfree;
-    function noAutomation(address,bytes) external returns (bytes) envfree;
-    function performData(address,bool) external returns (bytes) envfree;
-
-    // LibZip summaries
-    function _.cdCompress(bytes memory data) internal => compressionSummary(data) expect (bytes memory);
-    function _.cdDecompress(bytes memory data) internal => compressionSummary(data) expect (bytes memory);
+    function onTokenTransferData(address,address) external returns (bytes) envfree;
+    function performData(address,address,bool) external returns (bytes) envfree;
+    function logic.getIncrementedValue() external returns (uint256) envfree;
+    function logic.getSuccess() external returns (bool) envfree;
 }
 
 /*//////////////////////////////////////////////////////////////
                           DEFINITIONS
 //////////////////////////////////////////////////////////////*/
+/// @notice external functions that change state
 definition canChangeState(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,bool,bytes).selector ||
-    f.selector == sig:doSomething().selector ||
+	f.selector == sig:requestKycStatus(address,address).selector ||
     f.selector == sig:performUpkeep(bytes).selector ||
     f.selector == sig:withdrawFees().selector ||
     f.selector == sig:initialize(address).selector;
 
+/// @notice external functions that can be called to make request
 definition canRequestStatus(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,bool,bytes).selector;
+	f.selector == sig:requestKycStatus(address,address).selector;
 
-definition KYCStatusRequestedEvent() returns bytes32 =
-// keccak256(abi.encodePacked("KYCStatusRequested(bytes32,address)"))
-    to_bytes32(0x526f9e0c9d2f796e9c96170fef78e1b6b8dba50c6518f1101fdd1380113b9095);
+definition CompliantStatusRequestedEvent() returns bytes32 =
+// keccak256(abi.encodePacked("CompliantStatusRequested(bytes32,address,address)"))
+    to_bytes32(0x1297acbddb1a242c07b4024d683367f4a1a0c0d3ce6cfd9acf2812731794850a);
 
-definition KYCStatusRequestFulfilledEvent() returns bytes32 =
-// keccak256(abi.encodePacked("KYCStatusRequestFulfilled(bytes32,address,bool)"))
-    to_bytes32(0x0b3bad71afd0d65225e0e2be88b41241bc79ec76b33503ff0ca8fb03e47d9d8d);
+definition CompliantStatusFulfilledEvent() returns bytes32 =
+// keccak256(abi.encodePacked("CompliantStatusFulfilled(bytes32,address,address,bool)"))
+    to_bytes32(0x08d4934b589edfc28d3af23561c13b50e96ddf19f47def663ba217a9ff720694);
 
-definition CompliantCheckPassedEvent() returns bytes32 =
-// keccak256(abi.encodePacked("CompliantCheckPassed()"))
-    to_bytes32(0x55c497259911f7217100faf4dee7dc3263e9067bc83617fa439721b7047574de);
+definition CompliantLogicExecutionFailedEvent() returns bytes32 =
+// keccak256(abi.encodePacked("CompliantLogicExecutionFailed(bytes32,address,address,bool,bytes)"))
+    to_bytes32(0xf26409c317494206f6feac40c1676f1481f66716e008e26a4b09511c63fb16bb);
 
-/*//////////////////////////////////////////////////////////////
-                           FUNCTIONS
-//////////////////////////////////////////////////////////////*/
-/// @notice summarize LibZip.cdCompress() and LibZip.cdDecompress()
-/// @notice we are not verifying the LibZip library so are ok with such a basic mock
-// review - if isPending && data != 0, {PendingRequest.compliantCalldata == compressed(data)}
-function compressionSummary(bytes data) returns bytes {
-    return data;
-}
+definition NonCompliantUserEvent() returns bytes32 =
+// keccak256(abi.encodePacked("NonCompliantUser(address)"))
+    to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
+
+/// @notice 1e18
+definition WAD_PRECISION() returns uint256 = 1000000000000000000;
+
+/// @notice 5e7 (50c in PriceFeed decimals)
+definition COMPLIANT_FEE_PRECISION() returns uint256 = 50000000;
 
 /*//////////////////////////////////////////////////////////////
                              GHOSTS
@@ -89,44 +96,29 @@ persistent ghost mathint g_totalFeesWithdrawn {
     init_state axiom g_totalFeesWithdrawn == 0;
 }
 
-/// @notice track address to isPendingRequest
-persistent ghost mapping(address => bool) g_pendingRequests {
-    init_state axiom forall address a. g_pendingRequests[a] == false;
+/// @notice track the compliant restricted logic's incremented value 
+ghost mathint g_incrementedValue {
+    init_state axiom g_incrementedValue == 0;
 }
 
-/// @notice track the manual compliant restricted logic's incremented value 
-ghost mathint g_manualIncrement {
-    init_state axiom g_manualIncrement == 0;
+/// @notice track CompliantStatusRequested() event emissions
+ghost mathint g_compliantStatusRequestedEvents {
+    init_state axiom g_compliantStatusRequestedEvents == 0;
 }
 
-/// @notice track the automated compliant restricted logic's incremented value 
-ghost mathint g_automatedIncrement {
-    init_state axiom g_automatedIncrement == 0;
+/// @notice track CompliantStatusFulfilled() event emissions
+ghost mathint g_compliantStatusFulfilledEvents {
+    init_state axiom g_compliantStatusFulfilledEvents == 0;
 }
 
-/// @notice track KYCStatusRequested() event emissions
-ghost mathint g_kycStatusRequestedEvents {
-    init_state axiom g_kycStatusRequestedEvents == 0;
+/// @notice track CompliantLogicExecutionFailedEvent() event emissions
+ghost mathint g_compliantLogicExecutionFailedEvents {
+    init_state axiom g_compliantLogicExecutionFailedEvents == 0;
 }
 
-/// @notice track KYCStatusRequestFulfilled() event emissions
-ghost mathint g_kycStatusRequestFulfilledEvents {
-    init_state axiom g_kycStatusRequestFulfilledEvents == 0;
-}
-
-/// @notice track CompliantCheckPassed() event emissions
-ghost mathint g_compliantCheckPassedEvents {
-    init_state axiom g_compliantCheckPassedEvents == 0;
-}
-
-/// @notice track isCompliant bool emitted by KYCStatusRequestFulfilled()
-ghost bool g_fulfilledRequestIsCompliant {
-    init_state axiom g_fulfilledRequestIsCompliant == false;
-}
-
-// review - unused ghost
-persistent ghost mapping(address => bool) g_fulfilledRequestStatus {
-    init_state axiom forall address a. g_fulfilledRequestStatus[a] == false;
+/// @notice track NonCompliantUser() event emissions
+ghost mathint g_nonCompliantUserEvents {
+    init_state axiom g_nonCompliantUserEvents == 0;
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -138,41 +130,29 @@ hook Sstore s_compliantFeesInLink uint256 newValue (uint256 oldValue) {
     else g_totalFeesWithdrawn = g_totalFeesWithdrawn + oldValue;
 }
 
-/// @notice update g_pendingRequests when s_pendingRequests[address].isPending changes
-hook Sstore currentContract.s_pendingRequests[KEY address a].isPending bool newValue (bool oldValue) {
-    if (newValue != oldValue) g_pendingRequests[a] = newValue;
+/// @notice update g_incrementedValue when s_incrementedValue increments
+hook Sstore logic.s_incrementedValue uint256 newValue (uint256 oldValue) {
+    if (newValue > oldValue) g_incrementedValue = g_incrementedValue + 1;
 }
 
-/// @notice update g_manualIncrement when s_incrementedValue increments
-hook Sstore s_incrementedValue uint256 newValue (uint256 oldValue) {
-    if (newValue > oldValue) g_manualIncrement = g_manualIncrement + 1;
-}
-
-/// @notice update g_automatedIncrement when s_automatedIncrement increments
-hook Sstore s_automatedIncrement uint256 newValue (uint256 oldValue) {
-    if (newValue > oldValue) g_automatedIncrement = g_automatedIncrement + 1;
-}
-
-/// @notice increment g_kycStatusRequestedEvents when KYCStatusRequested() emitted
-hook LOG3(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2) {
-    if (t0 == KYCStatusRequestedEvent())
-        g_kycStatusRequestedEvents = g_kycStatusRequestedEvents + 1;
-}
-
-/// @notice increment g_kycStatusRequestFulfilledEvents when KYCStatusRequestFulfilled emitted
-/// @notice set g_fulfilledRequestIsCompliant to true when fulfilled event isCompliant
+/// @notice increment g_compliantStatusRequestedEvents when CompliantStatusRequested() emitted
+/// @notice increment g_compliantStatusFulfilledEvents when CompliantStatusFulfilled() emitted
+/// @notice increment g_compliantLogicExecutionFailedEvents when CompliantLogicExecutionFailed() emitted
 hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 t3) {
-    if (t0 == KYCStatusRequestFulfilledEvent()) 
-        g_kycStatusRequestFulfilledEvents = g_kycStatusRequestFulfilledEvents + 1;
+    if (t0 == CompliantStatusRequestedEvent())
+        g_compliantStatusRequestedEvents = g_compliantStatusRequestedEvents + 1;
 
-    if (t0 == KYCStatusRequestFulfilledEvent() && t3 != to_bytes32(0)) 
-        g_fulfilledRequestIsCompliant = true;
+    if (t0 == CompliantStatusFulfilledEvent()) 
+        g_compliantStatusFulfilledEvents = g_compliantStatusFulfilledEvents + 1;
+
+    if (t0 == CompliantLogicExecutionFailedEvent())
+        g_compliantLogicExecutionFailedEvents = g_compliantLogicExecutionFailedEvents + 1;
 }
 
-/// @notice increment g_compliantCheckPassedEvents when CompliantCheckPassed() emitted
-hook LOG1(uint offset, uint length, bytes32 t0) {
-    if (t0 == CompliantCheckPassedEvent()) 
-        g_compliantCheckPassedEvents = g_compliantCheckPassedEvents + 1;
+/// @notice increment g_nonCompliantUserEvents when NonCompliantUser() emitted
+hook LOG2(uint offset, uint length, bytes32 t0, bytes32 t1) {
+    if (t0 == NonCompliantUserEvent())
+        g_nonCompliantUserEvents = g_nonCompliantUserEvents + 1;
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -181,10 +161,6 @@ hook LOG1(uint offset, uint length, bytes32 t0) {
 /// @notice total fees to withdraw must equal total fees earned minus total fees already withdrawn
 invariant feesAccounting()
     to_mathint(getCompliantFeesToWithdraw()) == g_totalFeesEarned - g_totalFeesWithdrawn;
-
-/// @notice pending requests should only be true whilst waiting for Chainlink Automation
-invariant pendingRequests(address a)
-    getPendingRequest(a).isPending == g_pendingRequests[a];
 
 /*//////////////////////////////////////////////////////////////
                              RULES
@@ -217,13 +193,11 @@ rule onTokenTransfer_revertsWhen_insufficientFee() {
     address user;
     uint256 amount;
     bytes arbitraryData;
-    bytes data;
-    require data == isAutomation(user, arbitraryData) || data == noAutomation(user, arbitraryData);
+    bytes data = onTokenTransferData(user, logic);
 
-    if (data == isAutomation(user, arbitraryData)) require amount < getFeeWithAutomation();
-    else require amount < getFee();
+    require amount < getFee();
 
-    onTokenTransfer@withrevert(e, user, amount, data);
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
     assert lastReverted;
 }
 
@@ -260,51 +234,37 @@ rule performUpkeep_revertsWhen_notForwarder() {
     assert lastReverted;
 }
 
-/// @notice doSomething should revert if caller is not compliant
-rule doSomething_revertsWhen_notCompliant() {
-    env e;
-    calldataarg args;
-
-    require !getIsCompliant(e.msg.sender);
-
-    doSomething@withrevert(e, args);
-    assert lastReverted;
-}
-
 /// @notice fee calculation for requestKycStatus should be correct
 rule requestKycStatus_feeCalculation() {
     env e;
     address user;
-    bool isAutomation;
-    bytes arbitraryData;
+    address logicAddr;
     require link == getLink();
     require e.msg.sender != getEverest();
     require e.msg.sender != currentContract;
-    if (isAutomation) require e.msg.sender != forwarder.getRegistry();
+    require e.msg.sender != forwarder.getRegistry();
 
     uint256 balance_before = link.balanceOf(e.msg.sender);
 
-    requestKycStatus(e, user, isAutomation, arbitraryData);
+    requestKycStatus(e, user, logicAddr);
 
     uint256 balance_after = link.balanceOf(e.msg.sender);
 
-    if (isAutomation) assert balance_before == balance_after + getFeeWithAutomation();
-    else assert balance_before == balance_after + getFee();
+    assert balance_before == balance_after + getFee();
 }
 
 /// @notice fee calculation for onTokenTransfer should be correct
 rule onTokenTransfer_feeCalculation() {
     env e;
     address user;
+    address logicAddr;
     uint256 amount;
-    bytes arbitraryData;
     bytes data;
-    require data == isAutomation(user, arbitraryData) || data == noAutomation(user, arbitraryData);
+    require data == onTokenTransferData(user, logicAddr);
 
-    onTokenTransfer(e, user, amount, data);
+    onTokenTransfer(e, e.msg.sender, amount, data);
 
-    if (data == isAutomation(user, arbitraryData)) assert amount >= getFeeWithAutomation();
-    else assert amount >= getFee();
+    assert amount >= getFee();
 }
 
 /// @notice only owner should be able to call withdrawFees
@@ -331,155 +291,28 @@ rule withdrawFees_balanceIntegrity() {
     assert balance_after == balance_before - feesToWithdraw;
 }
 
-/// @notice automated requests made through onTokenTransfer should add funds to Chainlink registry
-rule onTokenTransfer_automatedRequest_fundsRegistry() {
-    env e;
-    address user;
-    uint256 amount;
-    bytes arbitraryData;
-    bytes data;
-    require data == isAutomation(user, arbitraryData);
-    require link == getLink();
-    require forwarder == getForwarder();
-    require registry == forwarder.getRegistry();
-    uint256 minBalance = registry.getMinBalance(getUpkeepId());
-
-    uint256 balance_before = link.balanceOf(registry);
-    require balance_before + minBalance <= max_uint;
-
-    onTokenTransfer(e, user, amount, data);
-
-    uint256 balance_after = link.balanceOf(registry);
-
-    assert balance_after == balance_before + minBalance;
-}
-
-/// @notice automated requests made with requestKycStatus should add funds to Chainlink registry
-rule requestKycStatus_automatedRequest_fundsRegistry() {
-    env e;
-    address user;
-    bool isAutomation;
-    bytes arbitraryData;
-    require link == getLink();
-    require e.msg.sender != getEverest();
-    require e.msg.sender != currentContract;
-    require isAutomation;
-    require e.msg.sender != forwarder.getRegistry();
-    uint256 minBalance = registry.getMinBalance(getUpkeepId());
-
-    uint256 balance_before = link.balanceOf(registry);
-    require balance_before + minBalance <= max_uint;
-
-    requestKycStatus(e, user, isAutomation, arbitraryData);
-
-    uint256 balance_after = link.balanceOf(registry);
-
-    assert balance_after == balance_before + minBalance;
-}
-
-/// @notice KYCStatusRequested event is emitted for every request
+/// @notice CompliantStatusRequested event is emitted for every request
 rule requests_emit_events(method f) filtered {f -> canRequestStatus(f)} {
     env e;
     calldataarg args;
 
-    require g_kycStatusRequestedEvents == 0;
+    require g_compliantStatusRequestedEvents == 0;
 
     f(e, args);
 
-    assert g_kycStatusRequestedEvents == 1;
+    assert g_compliantStatusRequestedEvents == 1;
 }
 
-/// @notice KYCStatusRequestFulfilled event is emitted for every fulfilled *AUTOMATED* request
-rule fulfilledAutomatedRequest_emits_event() {
+/// @notice CompliantStatusFulfilled event is emitted for every fulfilled request
+rule fulfilledRequest_emits_event() {
     env e;
     calldataarg args;
 
-    require g_kycStatusRequestFulfilledEvents == 0;
+    require g_compliantStatusFulfilledEvents == 0;
 
     performUpkeep(e, args);
 
-    assert g_kycStatusRequestFulfilledEvents == 1;
-}
-
-/// @notice CompliantCheckPassed() should only be emitted for compliant users
-rule compliantCheckPassed_emits_for_compliantUser() {
-    env e;
-    calldataarg args;
-
-    require g_compliantCheckPassedEvents == 0;
-    require g_fulfilledRequestIsCompliant == false;
-
-    performUpkeep(e, args);
-
-    assert g_compliantCheckPassedEvents == 1 => g_fulfilledRequestIsCompliant;
-    assert g_compliantCheckPassedEvents == 0 => !g_fulfilledRequestIsCompliant;
-}
-
-/// @notice Compliant restricted state change should only execute on behalf of compliant users
-rule compliantRestrictedLogic_manualExecution() {
-    env e;
-
-    require g_manualIncrement == 0;
-
-    doSomething(e);
-
-    assert g_manualIncrement == 1 => getIsCompliant(e.msg.sender);
-    assert g_manualIncrement == 0 => !getIsCompliant(e.msg.sender);
-}
-
-/// @notice automated compliant restricted state change should only execute on behalf of compliant user
-rule compliantRestrictedLogic_automatedExecution() {
-    env e;
-    calldataarg args;
-    address user; bool isCompliant;
-
-    require g_automatedIncrement == 0;
-
-    bytes performData = performData(user, isCompliant);
-
-    performUpkeep(e, performData);
-
-    assert g_automatedIncrement == 1 => isCompliant;
-    assert g_automatedIncrement == 0 => !isCompliant;
-}
-
-/// @notice compliant calldata passed to requestKycStatus should only be stored whilst automated request is pending
-rule requestKycStatus_compliantCalldata_storedCorrectly() {
-    env e;
-    address user;
-    bool isAutomation;
-    bytes arbitraryData;
-    require isAutomation;
-
-    Compliant.PendingRequest request_before = getPendingRequest(user);
-    require !request_before.isPending;
-
-    requestKycStatus(e, user, isAutomation, arbitraryData);
-
-    Compliant.PendingRequest request_after = getPendingRequest(user);
-
-    assert request_after.compliantCalldata == compressionSummary(arbitraryData) => request_after.isPending;
-    assert !request_after.isPending => request_after.compliantCalldata.length == 0;
-}
-
-/// @notice compliant calldata passed to onTokenTransfer should only be stored whilst automated request is pending
-rule onTokenTransfer_compliantCalldata_storedCorrectly() {
-    env e;
-    address user;
-    uint256 amount;
-    bytes arbitraryData;
-    bytes data;
-    require data == isAutomation(user, arbitraryData);
-
-    Compliant.PendingRequest request_before = getPendingRequest(user);
-    require !request_before.isPending;
-
-    onTokenTransfer(e, user, amount, data);
-
-    Compliant.PendingRequest request_after = getPendingRequest(user);
-
-    assert request_after.compliantCalldata == compressionSummary(arbitraryData) => request_after.isPending;
-    assert !request_after.isPending => request_after.compliantCalldata.length == 0;
+    assert g_compliantStatusFulfilledEvents == 1;
 }
 
 /// @notice requests must fund Everest with correct fee amount
@@ -500,4 +333,209 @@ rule requests_fundEverest(method f) filtered {f -> canRequestStatus(f)} {
     uint256 balance_after = link.balanceOf(everest);
 
     assert balance_after == balance_before + fee;
+}
+
+/// @notice requests must fund Automation registry with the correct amount
+rule requests_fundRegistry(method f) filtered {f -> canRequestStatus(f)} {
+    env e;
+    calldataarg args;
+    require link == getLink();
+    require forwarder == getForwarder();
+    require registry == forwarder.getRegistry();
+    require e.msg.sender != forwarder.getRegistry();
+
+    uint256 fee = registry.getMinBalance(getUpkeepId());
+
+    uint256 balance_before = link.balanceOf(registry);
+
+    require balance_before + fee <= max_uint;
+
+    f(e, args);
+
+    uint256 balance_after = link.balanceOf(registry);
+
+    assert balance_after == balance_before + fee;
+}
+
+/// @notice sanity check to make sure the logicRevert implementation does revert as expected
+rule logicReverts_check() {
+    env e;
+    require e.msg.sender == currentContract;
+    address user;
+    bool isCompliant = true;
+    require logic.getSuccess() == false;
+
+    logic.compliantLogic@withrevert(e, user, isCompliant);
+    assert lastReverted;
+}
+
+/// @notice CompliantLogic implementations that revert shouldn't cause CompliantRouter to revert
+rule logicReverts_handled() {
+    env e;
+    address user;
+    bool isCompliant = true;
+    bytes performData = performData(user, logic, isCompliant);
+    require e.msg.value == 0;
+    require e.msg.sender == getForwarder();
+    require currentContract == getProxy();
+    require logic.getSuccess() == false;
+
+    performUpkeep@withrevert(e, performData);
+    assert !lastReverted;
+}
+
+/// @notice CompliantLogicExecutionFailed() event should be emitted when CompliantLogic reverts
+rule logicReverts_emitsEvent() {
+    env e;
+    address user;
+    bool isCompliant = true;
+    bytes performData = performData(user, logic, isCompliant);
+    require e.msg.value == 0;
+    require e.msg.sender == getForwarder();
+    require currentContract == getProxy();
+    require logic.getSuccess() == false;
+
+    require g_compliantLogicExecutionFailedEvents == 0;
+
+    performUpkeep@withrevert(e, performData);
+    assert g_compliantLogicExecutionFailedEvents == 1;
+}
+
+/// @notice CompliantLogic must execute restricted logic (state change) on behalf of compliant user
+rule compliantLogic_executes_for_compliantUser() {
+    env e;
+    address user;
+    bool isCompliant = true;
+    bytes performData = performData(user, logic, isCompliant);
+
+    require logic.getSuccess() == true;
+
+    uint256 valueBefore = logic.getIncrementedValue();
+    require valueBefore < max_uint;
+    mathint ghostBefore = g_incrementedValue;
+
+    performUpkeep(e, performData);
+
+    uint256 valueAfter = logic.getIncrementedValue();
+    mathint ghostAfter = g_incrementedValue;
+
+    assert valueAfter == valueBefore + 1;
+    assert ghostAfter == ghostBefore + 1;
+}
+
+/// @notice CompliantLogic must emit NonCompliantUser() event for non compliant users
+rule compliantLogic_emitsEvent_for_nonCompliantUser() {
+    env e;
+    address user;
+    bool isCompliant = false;
+    bytes performData = performData(user, logic, isCompliant);
+
+    require logic.getSuccess() == true;
+    require g_nonCompliantUserEvents == 0;
+
+    performUpkeep(e, performData);
+
+    assert g_nonCompliantUserEvents == 1;
+}
+
+/// @notice CompliantLogic restricted logic must not be executed on behalf of non compliant users
+rule compliantLogic_does_not_execute_for_nonCompliantUser() {
+    env e;
+    address user;
+    bool isCompliant = false;
+    bytes performData = performData(user, logic, isCompliant);
+
+    require logic.getSuccess() == true;
+
+    uint256 valueBefore = logic.getIncrementedValue();
+    mathint ghostBefore = g_incrementedValue;
+
+    performUpkeep(e, performData);
+
+    uint256 valueAfter = logic.getIncrementedValue();
+    mathint ghostAfter = g_incrementedValue;
+
+    assert valueBefore == valueAfter;
+    assert ghostBefore == ghostAfter;
+}
+
+/// @notice onTokenTransfer should revert if passed logic address does not implement expected interface
+rule onTokenTransfer_revertsWhen_logicIncompatible() {
+    env e;
+    address user;
+    uint256 amount;
+    bytes data = onTokenTransferData(user, nonLogic);
+    require amount >= getFee();
+    require e.msg.sender == getLink();
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() < max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) >= amount;
+
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert lastReverted;
+}
+
+/// @notice onTokenTransfer should not revert under correct conditions
+rule onTokenTransfer_noRevert() {
+    env e;
+    address user;
+    uint256 amount;
+    bytes data = onTokenTransferData(user, logic);
+    require amount >= getFee();
+    require e.msg.sender == getLink();
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) >= amount;
+
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert !lastReverted;
+}
+
+/// @notice requestKycStatus should not revert under correct conditions
+rule requestKycStatus_noRevert() {
+    env e;
+    address user;
+    require e.msg.value == 0;
+    require e.msg.sender != registry;
+    require e.msg.sender != everest;
+    require e.msg.sender != 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) <= max_uint - getFee();
+    require link.balanceOf(e.msg.sender) >= getFee();
+    require link.allowance(e.msg.sender, currentContract) >= getFee();
+
+    requestKycStatus@withrevert(e, user, logic);
+    assert !lastReverted;
+}
+
+/// @notice requestKycStatus should revert when passed logic address does not implement expected interface
+rule requestKycStatus_revertsWhen_logicIncompatible() {
+    env e;
+    address user;
+    require e.msg.value == 0;
+    require e.msg.sender != registry;
+    require e.msg.sender != everest;
+    require e.msg.sender != 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) <= max_uint - getFee();
+    require link.balanceOf(e.msg.sender) >= getFee();
+    require link.allowance(e.msg.sender, currentContract) >= getFee();
+
+    requestKycStatus@withrevert(e, user, nonLogic);
+    assert lastReverted;
+}
+
+/// @notice calculation for protocol fee should be equal to 50c/LINK
+rule compliantFeeCalculation {
+    mathint fee = getCompliantFee();
+    mathint expectedFee = (WAD_PRECISION() * COMPLIANT_FEE_PRECISION()) / getLatestPrice();
+    assert fee == expectedFee;
 }

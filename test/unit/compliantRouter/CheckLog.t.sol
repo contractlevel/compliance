@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {BaseTest, LinkTokenInterface, Compliant} from "../BaseTest.t.sol";
+import {BaseTest, LinkTokenInterface, CompliantRouter} from "../../BaseTest.t.sol";
 import {ILogAutomation, Log} from "@chainlink/contracts/src/v0.8/automation/interfaces/ILogAutomation.sol";
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 
@@ -13,26 +13,25 @@ contract CheckLogTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
     /// @notice this test should be commented out if the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_called() public {
-        Log memory log = _createLog(true, address(compliant));
+        Log memory log = _createLog(true, address(compliantRouter), user);
         vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
-        compliant.checkLog(log, "");
+        compliantRouter.checkLog(log, "");
     }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_notProxy() public {
-        Log memory log = _createLog(true, address(compliant));
-        vm.expectRevert(abi.encodeWithSignature("Compliant__OnlyProxy()"));
-        compliant.checkLog(log, "");
+        Log memory log = _createLog(true, address(compliantRouter), user);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyProxy()"));
+        compliantRouter.checkLog(log, "");
     }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_isCompliant_and_pending() public {
         /// @dev set user to pending request
-        bytes memory emptyCallData = "";
-        _setUserPendingRequest(emptyCallData);
+        _setUserPendingRequest(address(logic));
 
         /// @dev check log
-        Log memory log = _createLog(true, address(compliantProxy));
+        Log memory log = _createLog(true, address(compliantProxy), user);
 
         (, bytes memory retData) = address(compliantProxy).call(
             abi.encodeWithSignature(
@@ -42,12 +41,13 @@ contract CheckLogTest is BaseTest {
         (bool upkeepNeeded, bytes memory performData) = abi.decode(retData, (bool, bytes));
 
         /// @dev decode performData
-        (bytes32 encodedRequestId, address encodedUser, bool isCompliant) =
-            abi.decode(performData, (bytes32, address, bool));
+        (bytes32 encodedRequestId, address encodedUser, address encodedLogic, bool isCompliant) =
+            abi.decode(performData, (bytes32, address, address, bool));
 
         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
         assertEq(expectedRequestId, encodedRequestId);
         assertEq(user, encodedUser);
+        assertEq(address(logic), encodedLogic);
         assertTrue(isCompliant);
         assertTrue(upkeepNeeded);
     }
@@ -55,11 +55,10 @@ contract CheckLogTest is BaseTest {
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_isNonCompliant_and_pending() public {
         /// @dev set user to pending request
-        bytes memory emptyCallData = "";
-        _setUserPendingRequest(emptyCallData);
+        _setUserPendingRequest(address(logic));
 
         /// @dev check log
-        Log memory log = _createLog(false, address(compliantProxy));
+        Log memory log = _createLog(false, address(compliantProxy), user);
         (, bytes memory retData) = address(compliantProxy).call(
             abi.encodeWithSignature(
                 "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
@@ -68,29 +67,44 @@ contract CheckLogTest is BaseTest {
         (bool upkeepNeeded, bytes memory performData) = abi.decode(retData, (bool, bytes));
 
         /// @dev decode performData
-        (bytes32 encodedRequestId, address encodedUser, bool isCompliant) =
-            abi.decode(performData, (bytes32, address, bool));
+        (bytes32 encodedRequestId, address encodedUser, address encodedLogic, bool isCompliant) =
+            abi.decode(performData, (bytes32, address, address, bool));
 
         bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
         assertEq(expectedRequestId, encodedRequestId);
         assertEq(user, encodedUser);
+        assertEq(address(logic), encodedLogic);
         assertFalse(isCompliant);
         assertTrue(upkeepNeeded);
     }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
-    function test_compliant_checkLog_isCompliant_and_notPending() public {
+    function test_compliant_checkLog_revertsWhen_notPending() public {
+        /// @dev set user to pending request
+        _setUserPendingRequest(address(logic));
+        /// @dev set pendingRequest to false
+        _setPendingRequestToFalse();
+
         /// @dev check log
-        Log memory log = _createLog(true, address(compliantProxy));
+        Log memory log = _createLog(true, address(compliantProxy), user);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__RequestNotPending()"));
         (, bytes memory retData) = address(compliantProxy).call(
             abi.encodeWithSignature(
                 "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
             )
         );
-        (bool upkeepNeeded, bytes memory performData) = abi.decode(retData, (bool, bytes));
+    }
 
-        assertEq(performData, "");
-        assertFalse(upkeepNeeded);
+    /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
+    function test_compliant_checkLog_revertsWhen_logicIncompatible() public {
+        /// @dev check log
+        Log memory log = _createLog(true, address(compliantProxy), user);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)", address(0)));
+        (, bytes memory retData) = address(compliantProxy).call(
+            abi.encodeWithSignature(
+                "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
+            )
+        );
     }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
@@ -98,8 +112,26 @@ contract CheckLogTest is BaseTest {
         address revealer = makeAddr("revealer");
 
         /// @dev check log
-        Log memory log = _createLog(true, revealer);
+        Log memory log = _createLog(true, revealer, user);
         vm.expectRevert(abi.encodeWithSignature("Compliant__RequestNotMadeByThisContract()"));
+        (, bytes memory retData) = address(compliantProxy).call(
+            abi.encodeWithSignature(
+                "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
+            )
+        );
+    }
+
+    /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
+    function test_compliant_checkLog_revertsWhen_invalidUser() public {
+        /// @dev set user to pending request
+        _setUserPendingRequest(address(logic));
+
+        /// @dev make invalid user
+        address invalidUser = makeAddr("invalidUser");
+
+        /// @dev check log
+        Log memory log = _createLog(true, address(compliantProxy), invalidUser);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__InvalidUser()"));
         (, bytes memory retData) = address(compliantProxy).call(
             abi.encodeWithSignature(
                 "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
@@ -110,7 +142,9 @@ contract CheckLogTest is BaseTest {
     /*//////////////////////////////////////////////////////////////
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
-    function _createLog(bool isCompliant, address revealer) internal view returns (Log memory) {
+    /// @notice the bytes32 requestId is for the address(user) -
+    /// this function expects the revealee to be address(user) and only takes revealee param to check invalid user revert
+    function _createLog(bool isCompliant, address revealer, address revealee) internal view returns (Log memory) {
         bytes32[] memory topics = new bytes32[](3);
         bytes32 eventSignature = keccak256("Fulfilled(bytes32,address,address,uint8,uint40)");
         bytes32 requestId = bytes32(uint256(uint160(user)));
@@ -124,7 +158,7 @@ contract CheckLogTest is BaseTest {
         if (isCompliant) status = IEverestConsumer.Status.KYCUser;
         else status = IEverestConsumer.Status.NotFound;
 
-        bytes memory data = abi.encode(user, status, block.timestamp);
+        bytes memory data = abi.encode(revealee, status, block.timestamp);
 
         Log memory log = Log({
             index: 0,
@@ -138,5 +172,20 @@ contract CheckLogTest is BaseTest {
         });
 
         return log;
+    }
+
+    function _setPendingRequestToFalse() internal {
+        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes memory performData = abi.encode(requestId, user, address(logic), true);
+
+        vm.prank(forwarder);
+        (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
+        require(success, "delegate call to performUpkeep failed");
+
+        (, bytes memory retData) =
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
+        CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
+
+        assertFalse(request.isPending);
     }
 }

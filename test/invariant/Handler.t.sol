@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {Test, console2, Vm} from "forge-std/Test.sol";
-import {Compliant} from "../../src/Compliant.sol";
+import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {MockEverestConsumer} from "../mocks/MockEverestConsumer.sol";
 import {MockAutomationRegistry} from "../mocks/MockAutomationRegistry.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -10,19 +10,21 @@ import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interface
 import {IEverestConsumer} from "@everest/contracts/interfaces/IEverestConsumer.sol";
 import {IAutomationRegistryConsumer} from
     "@chainlink/contracts/src/v0.8/automation/interfaces/IAutomationRegistryConsumer.sol";
-import {LibZip} from "@solady/src/utils/LibZip.sol";
+import {LogicWrapper} from "../wrappers/LogicWrapper.sol";
+import {LogicWrapperRevert} from "../wrappers/LogicWrapperRevert.sol";
 
 contract Handler is Test {
     /*//////////////////////////////////////////////////////////////
                            TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
     using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.Bytes32Set;
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @dev compliant contract being handled
-    Compliant public compliant;
+    CompliantRouter public compliantRouter;
     /// @dev compliant proxy being handled
     address public compliantProxy;
     /// @dev deployer
@@ -39,9 +41,15 @@ contract Handler is Test {
     address public registry;
     /// @dev Chainlink Automation UpkeepId
     uint256 public upkeepId;
+    /// @dev CompliantLogic wrapper implementation
+    LogicWrapper public logic;
+    /// @dev CompliantLogic reverting implementation
+    LogicWrapperRevert public logicRevert;
 
     /// @dev track the users in the system (requestedAddresses)
     EnumerableSet.AddressSet internal users;
+    /// @dev track the requestIds in the system
+    EnumerableSet.Bytes32Set internal requestIds;
 
     /// @dev ghost to track direct calls to Compliant implementation
     uint256 public g_directImplementationCalls;
@@ -55,28 +63,26 @@ contract Handler is Test {
     /// @dev ghost to track total fees that have been withdrawn
     uint256 public g_totalFeesWithdrawn;
 
-    /// @dev ghost to track number of times compliant restricted logic manually executed
-    uint256 public g_manualIncrement;
     /// @dev ghost to track number of times compliant restricted logic executed with automation
-    uint256 public g_automationIncrement;
+    uint256 public g_incrementedValue;
 
-    /// @dev ghost to increment every time KYCStatusRequestFulfilled contains compliant
+    /// @dev ghost to increment every time CompliantStatusFulfilled contains compliant
     uint256 public g_fulfilledRequestIsCompliant;
     /// @dev ghost to increment every time CompliantCheckPassed() event is emitted for automated requests
     uint256 public g_automatedCompliantCheckPassed;
 
-    /// @dev ghost to track params emitted by KYCStatusRequested(address,bytes32) event
+    /// @dev ghost to track params emitted by CompliantStatusRequested(bytes32,address,address) event
     mapping(address user => bytes32 requestId) public g_requestedEventRequestId;
     /// @dev ghost to track if a user's compliance status has been requested
     mapping(address user => bool requested) public g_requestedUsers;
 
     /// @dev ghost to track amount of requests made
     uint256 public g_requestsMade;
-    /// @dev ghost to track amount of KYCStatusRequested(bytes32,address) events emitted
+    /// @dev ghost to track amount of CompliantStatusRequested(bytes32,address,address) events emitted
     uint256 public g_requestedEventsEmitted;
     /// @dev ghost to track amount of requests fulfilled
     uint256 public g_requestsFulfilled; // compliant request event
-    /// @dev ghost to increment amount of KYCStatusRequestFulfilled(bytes32,address,bool) events emitted
+    /// @dev ghost to increment amount of CompliantStatusFulfilled(bytes32,address,address,bool) events emitted
     uint256 public g_compliantFulfilledEventsEmitted;
 
     /// @dev ghost to increment every time Everest.Fulfilled() event is emitted
@@ -110,15 +116,23 @@ contract Handler is Test {
     /// @dev ghost to track requestedAddresses to compliant status
     mapping(address requestedAddress => bool isCompliant) public g_requestedAddressToStatus;
     /// @dev ghost to track pending requests
-    mapping(address requestedAddress => bool isPending) public g_pendingRequests;
-    /// @dev ghost to track requestedAddresses to compliant calldata
-    mapping(address requestedAddress => bytes compliantCalldata) public g_requestedAddressToCalldata;
+    mapping(bytes32 requestId => bool isPending) public g_pendingRequests;
+    /// @dev ghost to track requestId to user
+    mapping(bytes32 requestId => address user) public g_requestIdToUser;
+
+    /// @dev ghost to track CompliantLogic.NonCompliantUser events
+    /// @notice this is true if NONCompliant!
+    mapping(address emittedUser => bool isNotCompliant) public g_nonCompliantUserEvent;
+
+    /// @dev ghost to track the requestId to whether the request is to valid logic implementation
+    // do we need this? is this the right kind of ghost? what do we want to track about valid logic implementation use?
+    mapping(bytes32 requestId => bool isLogic) public g_requestIsLogic;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
     constructor(
-        Compliant _compliant,
+        CompliantRouter _compliantRouter,
         address _compliantProxy,
         address _deployer,
         address _link,
@@ -126,9 +140,11 @@ contract Handler is Test {
         address _everest,
         address _proxyAdmin,
         address _registry,
-        uint256 _upkeepId
+        uint256 _upkeepId,
+        LogicWrapper _logic,
+        LogicWrapperRevert _logicRevert
     ) {
-        compliant = _compliant;
+        compliantRouter = _compliantRouter;
         compliantProxy = _compliantProxy;
         deployer = _deployer;
         link = _link;
@@ -137,22 +153,22 @@ contract Handler is Test {
         proxyAdmin = _proxyAdmin;
         registry = _registry;
         upkeepId = _upkeepId;
+        logic = _logic;
+        logicRevert = _logicRevert;
     }
 
     /*//////////////////////////////////////////////////////////////
                                 EXTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @dev simulate onTokenTransfer or requestKycStatus
-    function sendRequest(
-        uint256 addressSeed,
-        bool isCompliant,
-        bool isAutomation,
-        bytes calldata compliantCalldata,
-        bool isOnTokenTransfer
-    ) public {
+    function sendRequest(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic) public {
         /// @dev start request by getting a user and dealing them appropriate amount of link
-        (address user, uint256 amount) = _startRequest(addressSeed, isCompliant, isAutomation);
+        (address user, uint256 amount) = _startRequest(addressSeed, isCompliant);
         users.add(user);
+
+        address logicImplementation;
+        if (isLogic) logicImplementation = address(logic);
+        else logicImplementation = address(logicRevert);
 
         /// @dev record logs of the request (and simulated Everest fulfillment)
         vm.recordLogs();
@@ -160,68 +176,52 @@ contract Handler is Test {
         /// @dev send request with isOnTokenTransfer or requestKycStatus
         if (isOnTokenTransfer) {
             /// @dev create calldata for transferAndCall request
-            bytes memory data = abi.encode(user, isAutomation, compliantCalldata);
+            bytes memory data = abi.encode(user, logicImplementation);
             /// @dev send request with onTokenTransfer
             vm.startPrank(user);
             bool success =
-                LinkTokenInterface(compliant.getLink()).transferAndCall(address(compliantProxy), amount, data);
+                LinkTokenInterface(compliantRouter.getLink()).transferAndCall(address(compliantProxy), amount, data);
             require(success, "transferAndCall in handler failed");
             vm.stopPrank();
         } else {
             /// @dev approve compliantProxy to spend link
             vm.startPrank(user);
-            LinkTokenInterface(compliant.getLink()).approve(address(compliantProxy), amount);
+            LinkTokenInterface(compliantRouter.getLink()).approve(address(compliantProxy), amount);
             /// @dev requestKycStatus
             (bool success,) = address(compliantProxy).call(
-                abi.encodeWithSignature("requestKycStatus(address,bool,bytes)", user, isAutomation, compliantCalldata)
+                abi.encodeWithSignature("requestKycStatus(address,address)", user, logicImplementation)
             );
             require(success, "delegate call in handler to requestKycStatus() failed");
             vm.stopPrank();
         }
 
+        /// @dev get the requestId from recorded logs and update relevant ghosts and simulated Everest fulfill
+        bytes32 requestId = _handleRequestLogs();
+
         /// @dev update relevant ghosts for request
-        _updateRequestGhosts(user, isAutomation, compliantCalldata);
+        _updateRequestGhosts(requestId, user, isLogic);
 
-        /// @dev if isAutomation, simulate automation with performUpkeep
-        if (isAutomation) {
-            _performUpkeep(user, isCompliant);
-        }
+        /// @dev record logs again
+        vm.recordLogs();
 
-        /// @dev get recorded logs and update relevant ghosts for requested event and simulated Everest fulfill
-        _handleRequestLogs(user);
-    }
+        /// @dev simulate automation with performUpkeep
+        _performUpkeep(user, logicImplementation, isCompliant, isLogic);
 
-    /// @dev onlyCompliant
-    function doSomething(uint256 addressSeed) public {
-        address user = _createOrGetUser(addressSeed);
-        require(user != proxyAdmin && user != compliantProxy, "Invalid address used.");
-
-        if (g_requestedAddressToStatus[user]) {
-            vm.prank(user);
-            (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("doSomething()"));
-            require(success, "delegate call in handler to doSomething() failed");
-
-            g_manualIncrement++;
-        }
+        /// @dev handle logs for performUpkeep
+        _handlePerformUpkeepLogs();
     }
 
     /// @dev onlyOwner
-    function withdrawFees(
-        uint256 addressSeed,
-        bool isCompliant,
-        bool isAutomation,
-        bytes calldata compliantCalldata,
-        bool isOnTokenTransfer
-    ) public {
+    function withdrawFees(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic) public {
         if (g_compliantFeesInLink == 0) {
-            sendRequest(addressSeed, isCompliant, isAutomation, compliantCalldata, isOnTokenTransfer);
+            sendRequest(addressSeed, isCompliant, isOnTokenTransfer, isLogic);
         } else {
             /// @dev getCompliantFeesToWithdraw and add it to ghost tracker
             (, bytes memory retData) =
                 address(compliantProxy).call(abi.encodeWithSignature("getCompliantFeesToWithdraw()"));
             uint256 fees = abi.decode(retData, (uint256));
 
-            vm.prank(compliant.owner());
+            vm.prank(compliantRouter.owner());
             (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("withdrawFees()"));
             require(success, "delegate call in handler to withdrawFees() failed");
 
@@ -231,12 +231,7 @@ contract Handler is Test {
     }
 
     /// @dev onlyProxy
-    function externalImplementationCalls(
-        uint256 divisor,
-        uint256 addressSeed,
-        bool isAutomation,
-        bytes memory compliantCalldata
-    ) public {
+    function externalImplementationCalls(uint256 divisor, uint256 addressSeed) public {
         /// @dev increment ghost
         g_directImplementationCalls++;
 
@@ -245,16 +240,14 @@ contract Handler is Test {
         address user = _seedToAddress(addressSeed);
 
         /// @dev make direct call to one of external functions
-        uint256 choice = divisor % 5;
+        uint256 choice = divisor % 4;
         if (choice == 0) {
-            _directOnTokenTransfer(user, isAutomation, compliantCalldata);
+            _directOnTokenTransfer(user);
         } else if (choice == 1) {
-            _directRequestKycStatus(user, isAutomation, compliantCalldata);
+            _directRequestKycStatus(user);
         } else if (choice == 2) {
-            _directDoSomething();
-        } else if (choice == 3) {
             _directWithdrawFees();
-        } else if (choice == 4) {
+        } else if (choice == 3) {
             _directInitialize(user);
         } else {
             revert("Invalid choice");
@@ -274,15 +267,17 @@ contract Handler is Test {
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @dev onlyForwarder
-    function _performUpkeep(address requestedAddress, bool isCompliant) internal {
+    function _performUpkeep(address requestedAddress, address logicImplementation, bool isCompliant, bool isLogic)
+        internal
+    {
         bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
-        bytes memory performData = abi.encode(requestId, requestedAddress, isCompliant);
+        bytes memory performData = abi.encode(requestId, requestedAddress, logicImplementation, isCompliant);
 
         vm.prank(forwarder);
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
         require(success, "delegate call in handler to performUpkeep() failed");
 
-        _updatePerformUpkeepGhosts(requestedAddress, isCompliant);
+        _updatePerformUpkeepGhosts(requestId, requestedAddress, isCompliant, isLogic);
     }
 
     function _handleOnlyProxyError(bytes memory error) internal {
@@ -292,75 +287,73 @@ contract Handler is Test {
         assembly {
             selector := mload(add(error, 32))
         }
-        assertEq(selector, bytes4(keccak256("Compliant__OnlyProxy()")));
+        assertEq(selector, bytes4(keccak256("CompliantRouter__OnlyProxy()")));
     }
 
-    function _startRequest(uint256 addressSeed, bool isCompliant, bool isAutomation)
-        internal
-        returns (address, uint256)
-    {
+    function _startRequest(uint256 addressSeed, bool isCompliant) internal returns (address, uint256) {
         /// @dev create a user
         address user = _seedToAddress(addressSeed);
         require(user != proxyAdmin && user != compliantProxy, "Invalid address used.");
         /// @dev set the Everest status for the request
         _setEverestStatus(user, isCompliant);
         /// @dev deal link to user
-        uint256 amount = _dealLink(user, isAutomation);
+        uint256 amount = _dealLink(user);
 
         return (user, amount);
     }
 
-    function _updateRequestGhosts(address user, bool isAutomation, bytes memory compliantCalldata) internal {
-        /// @dev store compliantCalldata in ghost mapping
-        if (isAutomation && compliantCalldata.length > 0) {
-            bytes memory compressedData = LibZip.cdCompress(compliantCalldata);
-            g_requestedAddressToCalldata[user] = compressedData;
-        }
-
+    function _updateRequestGhosts(bytes32 requestId, address user, bool isLogic) internal {
         /// @dev set request to pending
-        if (isAutomation) {
-            g_pendingRequests[user] = true;
-            g_linkAddedToRegistry += IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
-        }
+        g_pendingRequests[requestId] = true;
+        g_requestIdToUser[requestId] = user;
+
+        g_linkAddedToRegistry += IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
 
         /// @dev update totalFeesEarned ghost
-        g_totalFeesEarned += compliant.getFee() - IEverestConsumer(everest).oraclePayment();
+        g_totalFeesEarned +=
+            compliantRouter.getFee() - IEverestConsumer(everest).oraclePayment() - compliantRouter.getAutomationFee();
 
         /// @dev increment requests made
         g_requestsMade++;
 
         /// @dev update last external fees
         g_lastEverestFee = IEverestConsumer(everest).oraclePayment();
-        if (isAutomation) g_lastAutomationFee = IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
+        g_lastAutomationFee = IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
+
+        /// @dev map the requestId to whether the request is to valid logic implementation
+        g_requestIsLogic[requestId] = isLogic;
     }
 
-    function _updatePerformUpkeepGhosts(address user, bool isCompliant) internal {
+    function _updatePerformUpkeepGhosts(bytes32 requestId, address user, bool isCompliant, bool isLogic) internal {
         /// @dev increment
-        if (isCompliant) g_automationIncrement++;
+        if (isCompliant && isLogic) g_incrementedValue++;
 
-        g_pendingRequests[user] = false;
+        g_pendingRequests[requestId] = false;
         g_fulfilledUsers[user] = true;
         g_requestsFulfilled++;
     }
 
-    function _handleRequestLogs(address user) internal {
-        bytes32 kycStatusRequested = keccak256("KYCStatusRequested(bytes32,address)");
+    function _handleRequestLogs() internal returns (bytes32) {
+        bytes32 compliantStatusRequested = keccak256("CompliantStatusRequested(bytes32,address,address)");
         bytes32 everestFulfilled = keccak256("Fulfilled(bytes32,address,address,uint8,uint40)");
-        bytes32 kycStatusRequestFulfilled = keccak256("KYCStatusRequestFulfilled(bytes32,address,bool)");
-        bytes32 compliantCheckPassed = keccak256("CompliantCheckPassed()");
         bytes32 approval = keccak256("Approval(address,address,uint256)");
+
+        bytes32 requestId;
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         for (uint256 i = 0; i < logs.length; i++) {
-            /// @dev handle KYCStatusRequested() event params and ghosts
-            if (logs[i].topics[0] == kycStatusRequested) {
+            /// @dev handle CompliantStatusRequested() event params and ghosts
+            if (logs[i].topics[0] == compliantStatusRequested) {
                 bytes32 emittedRequestId = logs[i].topics[1];
                 address emittedUser = address(uint160(uint256(logs[i].topics[2])));
 
                 g_requestedEventRequestId[emittedUser] = emittedRequestId;
                 g_requestedUsers[emittedUser] = true;
                 g_requestedEventsEmitted++;
+
+                requestId = emittedRequestId;
+                requestIds.add(requestId);
             }
 
             /// @dev handle Everest.Fulfilled() event params and ghost
@@ -372,25 +365,6 @@ contract Handler is Test {
                 g_everestFulfilledEventRequestId[revealee] = everestRequestId;
                 g_everestFulfilledEventIsCompliant[revealee] = (status == IEverestConsumer.Status.KYCUser);
                 g_everestFulfilledEventsEmitted++;
-            }
-
-            /// @dev handle KYCStatusRequestFulfilled() event params and ghost
-            if (logs[i].topics[0] == kycStatusRequestFulfilled) {
-                bytes32 emittedRequestId = logs[i].topics[1];
-                g_compliantFulfilledEventRequestId[user] = emittedRequestId;
-
-                /// @dev if isCompliant is true, increment ghost value
-                if ((logs[i].topics[3] != bytes32(0))) {
-                    g_fulfilledRequestIsCompliant++;
-                    g_compliantFulfilledEventIsCompliant[user] = true;
-                }
-
-                g_compliantFulfilledEventsEmitted++;
-            }
-
-            /// @dev handle CompliantCheckPassed() event
-            if (logs[i].topics[0] == compliantCheckPassed) {
-                g_automatedCompliantCheckPassed++;
             }
 
             /// @dev handle Approval() event
@@ -406,40 +380,64 @@ contract Handler is Test {
                 }
             }
         }
+
+        return requestId;
     }
 
-    function _directOnTokenTransfer(address user, bool isAutomation, bytes memory compliantCalldata) internal {
-        uint256 amount;
-        if (isAutomation) amount = compliant.getFeeWithAutomation();
-        else amount = compliant.getFee();
-        deal(link, user, amount);
+    function _handlePerformUpkeepLogs() internal {
+        bytes32 compliantStatusFulfilled = keccak256("CompliantStatusFulfilled(bytes32,address,address,bool)");
+        bytes32 nonCompliantUserEvent = keccak256("NonCompliantUser(address)");
 
-        bytes memory data = abi.encode(user, isAutomation, compliantCalldata);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        address user;
+
+        for (uint256 i = 0; i < logs.length; i++) {
+            /// @dev handle CompliantStatusFulfilled() event params and ghost
+            if (logs[i].topics[0] == compliantStatusFulfilled) {
+                bytes32 emittedRequestId = logs[i].topics[1];
+                user = address(uint160(uint256(logs[i].topics[2])));
+                g_compliantFulfilledEventRequestId[user] = emittedRequestId;
+
+                /// @dev if isCompliant is true, increment ghost value
+                bool emittedBool = abi.decode(logs[i].data, (bool));
+                if (emittedBool) g_fulfilledRequestIsCompliant++;
+                g_compliantFulfilledEventIsCompliant[user] = emittedBool;
+
+                g_compliantFulfilledEventsEmitted++;
+            }
+
+            /// @dev handle CompliantLogic.NonCompliantUser() event
+            if (logs[i].topics[0] == nonCompliantUserEvent) {
+                address nonCompliantUser = address(uint160(uint256(logs[i].topics[1])));
+                require(user == nonCompliantUser, "invalid users emitted by fulfilled and nonCompliant events.");
+
+                g_nonCompliantUserEvent[user] = true;
+            } else {
+                g_nonCompliantUserEvent[user] = false;
+            }
+        }
+    }
+
+    function _directOnTokenTransfer(address user) internal {
+        uint256 amount = _dealLink(user);
+
+        bytes memory data = abi.encode(user, address(logic));
 
         vm.prank(user);
-        try LinkTokenInterface(link).transferAndCall(address(compliant), amount, data) {
+        try LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data) {
             g_directCallSuccesses++;
         } catch (bytes memory error) {
             _handleOnlyProxyError(error);
         }
     }
 
-    function _directRequestKycStatus(address user, bool isAutomation, bytes memory compliantCalldata) internal {
-        uint256 amount;
-        if (isAutomation) amount = compliant.getFeeWithAutomation();
-        else amount = compliant.getFee();
+    function _directRequestKycStatus(address user) internal {
+        uint256 amount = compliantRouter.getFee();
         deal(link, user, amount);
 
         vm.prank(user);
-        try compliant.requestKycStatus(user, isAutomation, compliantCalldata) {
-            g_directCallSuccesses++;
-        } catch (bytes memory error) {
-            _handleOnlyProxyError(error);
-        }
-    }
-
-    function _directDoSomething() internal {
-        try compliant.doSomething() {
+        try compliantRouter.requestKycStatus(user, address(logic)) {
             g_directCallSuccesses++;
         } catch (bytes memory error) {
             _handleOnlyProxyError(error);
@@ -447,7 +445,7 @@ contract Handler is Test {
     }
 
     function _directWithdrawFees() internal {
-        try compliant.withdrawFees() {
+        try compliantRouter.withdrawFees() {
             g_directCallSuccesses++;
         } catch (bytes memory error) {
             _handleOnlyProxyError(error);
@@ -455,7 +453,7 @@ contract Handler is Test {
     }
 
     function _directInitialize(address initialOwner) internal {
-        try compliant.initialize(initialOwner) {
+        try compliantRouter.initialize(initialOwner) {
             g_directCallSuccesses++;
         } catch (bytes memory error) {
             _handleOnlyProxyError(error);
@@ -471,6 +469,15 @@ contract Handler is Test {
 
         for (uint256 i; i < users.length(); ++i) {
             func(users.at(i));
+        }
+    }
+
+    /// @dev helper function for looping through requestIds in the system
+    function forEachRequestId(function(bytes32) external func) external {
+        if (requestIds.length() == 0) return;
+
+        for (uint256 i; i < requestIds.length(); ++i) {
+            func(requestIds.at(i));
         }
     }
 
@@ -514,7 +521,7 @@ contract Handler is Test {
 
     /// @dev set/fuzz the everest status of a requestedAddress
     function _setEverestStatus(address user, bool isCompliant) internal {
-        MockEverestConsumer(address(compliant.getEverest())).setLatestFulfilledRequest(
+        MockEverestConsumer(address(compliantRouter.getEverest())).setLatestFulfilledRequest(
             false, isCompliant, isCompliant, address(compliantProxy), user, uint40(block.timestamp)
         );
 
@@ -522,10 +529,8 @@ contract Handler is Test {
     }
 
     /// @dev deal link to revealer to pay for funds and return amount
-    function _dealLink(address receiver, bool isAutomation) internal returns (uint256) {
-        uint256 amount;
-        if (isAutomation) amount = compliant.getFeeWithAutomation();
-        else amount = compliant.getFee();
+    function _dealLink(address receiver) internal returns (uint256) {
+        uint256 amount = compliantRouter.getFee();
 
         deal(link, receiver, amount);
 

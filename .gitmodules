@@ -10,6 +10,3 @@
 [submodule "lib/everest-chainlink-consumer"]
 	path = lib/everest-chainlink-consumer
 	url = https://github.com/palmcivet7/everest-chainlink-consumer
-[submodule "lib/solady"]
-	path = lib/solady
-	url = https://github.com/vectorized/solady
