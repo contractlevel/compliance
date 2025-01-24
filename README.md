@@ -39,11 +39,11 @@ Compliant restricted logic can only be executed on behalf of users who meet this
 
 Users can interact with the `CompliantRouter` contract to request the KYC status of an address in two ways:
 
-1. Call `LINK.transferAndCall()` on the LINK token contract, passing the Compliant contract's address, fee amount, and calldata. The calldata should include the address to query, and the client-defined `CompliantLogic` address to callback.
+1. Call `LINK.transferAndCall()` on the LINK token contract, passing the `CompliantRouter` contract's address, fee amount, and calldata. The calldata should include the address to query, and the client-defined `CompliantLogic` address to callback.
 
 ![System Architecture](./diagrams/contract-level-compliance.png)
 
-2. Call `LINK.approve()` on the LINK token address, passing the Compliant contract's address and fee amount. Then call `Compliant.requestKycStatus()`, passing the address to query and the client-defined `CompliantLogic` address to callback.
+2. Call `LINK.approve()` on the LINK token address, passing the `CompliantRouter` contract's address and fee amount. Then call `Compliant.requestKycStatus()`, passing the address to query and the client-defined `CompliantLogic` address to callback.
 
 The fee amount to pass for both options can be read from `CompliantRouter.getFee()`.
 
