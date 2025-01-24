@@ -240,6 +240,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 compliantFeesInLink = s_compliantFeesInLink;
         s_compliantFeesInLink = 0;
 
+        // review - should event be emitted here?
+
         //slither-disable-next-line unchecked-transfer
         i_link.transfer(owner(), compliantFeesInLink);
     }
