@@ -46,7 +46,16 @@ contract HelperConfig is Script {
     /*//////////////////////////////////////////////////////////////
                                  GETTER
     //////////////////////////////////////////////////////////////*/
-    function getPolygonConfig() public pure returns (NetworkConfig memory) {}
+    function getPolygonConfig() public pure returns (NetworkConfig memory) {
+        return NetworkConfig({
+            everest: 0xC1AfF12173B38aE44feDF453Af7A57AFF3cFd3f0,
+            link: 0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39,
+            linkUsdFeed: 0xd9FFdb71EbE7496cC440152d43986Aae0AB76665,
+            registry: 0x08a8eea76D2395807Ce7D1FC942382515469cCA1,
+            registrar: 0x0Bc5EDC7219D272d9dEDd919CE2b4726129AC02B,
+            forwarder: address(0)
+        });
+    }
 
     function getEthMainnetConfig() public pure returns (NetworkConfig memory) {
         return NetworkConfig({
