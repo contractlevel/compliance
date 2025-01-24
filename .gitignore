@@ -18,3 +18,4 @@ docs/
 
 .certora_internal
 gambit_out
+report.md

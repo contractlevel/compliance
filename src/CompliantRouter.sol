@@ -29,7 +29,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__OnlyProxy();
     error CompliantRouter__OnlyLinkToken();
     error CompliantRouter__InsufficientLinkTransferAmount(uint256 requiredAmount);
-    error CompliantRouter__PendingRequestExists(address pendingRequestedAddress);
     error CompliantRouter__OnlyForwarder();
     error CompliantRouter__RequestNotMadeByThisContract();
     error CompliantRouter__NotCompliantLogic(address invalidContract);
@@ -188,6 +187,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             (address user, IEverestConsumer.Status kycStatus,) =
                 abi.decode(log.data, (address, IEverestConsumer.Status, uint40));
 
+            //slither-disable-next-line uninitialized-local
             bool isCompliant;
             if (kycStatus == IEverestConsumer.Status.KYCUser) {
                 isCompliant = true;
@@ -240,6 +240,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 compliantFeesInLink = s_compliantFeesInLink;
         s_compliantFeesInLink = 0;
 
+        //slither-disable-next-line unchecked-transfer
         i_link.transfer(owner(), compliantFeesInLink);
     }
 
@@ -297,8 +298,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         }
 
         IAutomationRegistryConsumer registry = i_forwarder.getRegistry();
+        // review unused-return
         i_link.approve(address(registry), automationFeeInLink);
         registry.addFunds(i_upkeepId, automationFeeInLink);
+        // review unused-return
         i_link.approve(address(i_everest), everestFeeInLink);
 
         return totalFee;
@@ -317,6 +320,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @dev returns the latest LINK/USD price
     function _getLatestPrice() internal view returns (uint256) {
+        //slither-disable-next-line unused-return
         (, int256 price,,,) = i_linkUsdFeed.latestRoundData();
         return uint256(price);
     }
@@ -358,7 +362,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @notice returns the fee for a standard KYC request
-    function getFee() public view returns (uint256) {
+    function getFee() external view returns (uint256) {
         uint256 compliantFeeInLink = _calculateCompliantFee();
         uint256 everestFeeInLink = _getEverestFee();
         uint256 automationFeeInLink = _getAutomationFee();
