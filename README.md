@@ -125,8 +125,6 @@ Pass the `CompliantRouter` (`CompliantProxy`) address in the constructor.
 
 ## Additional Comments
 
-This project uses a [community fork of the EverestConsumer](https://github.com/palmcivet7/everest-chainlink-consumer) with updated Chainlink function names, gas optimizations and a label adjustment in the `IEverestConsumer` interface.
-
 It is currently only possible to pay for `CompliantRouter` requests with the LINK token. A future feature could be payment abstraction allowing the use of payments in other tokens such as native, USDC, etc that then get swapped to LINK.
 
 ## Disclaimer
