@@ -55,6 +55,12 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @notice this value could be something different or even configurable
     /// this could be the max - review this
     uint256 internal constant COMPLIANT_FEE = 5e7; // 50_000_000
+    /// @dev max gas limit for CompliantLogic callback
+    // review this amount and if it should be uint32 instead of uint256
+    uint256 internal constant MAX_GAS_LIMIT = 3_000_000;
+    /// @dev default gas limit for CompliantLogic callback
+    // review this amount and if it should be uint32 instead of uint256
+    uint256 internal constant DEFAULT_GAS_LIMIT = 200_000;
 
     /// @dev Everest Chainlink Consumer
     IEverestConsumer internal immutable i_everest;
@@ -230,8 +236,18 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         /// @dev if logic implementation reverts, complete tx with event indicating as such
         // review this needs a gasLimit!
-        try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
-        catch (bytes memory err) {
+        // try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
+        // catch (bytes memory err) {
+        //     emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
+        // }
+
+        bytes memory callData = abi.encodeWithSelector(ICompliantLogic.compliantLogic.selector, user, isCompliant);
+
+        // Perform the low-level call with the gas limit
+        (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
+
+        if (!success) {
+            // Emit an event to log the failure
             emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
         }
     }
