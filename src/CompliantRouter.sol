@@ -229,6 +229,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
         /// @dev if logic implementation reverts, complete tx with event indicating as such
+        // review this needs a gasLimit!
         try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
         catch (bytes memory err) {
             emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
