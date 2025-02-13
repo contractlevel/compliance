@@ -25,7 +25,7 @@ contract WithdrawFeesTest is BaseTest {
         /// @dev call requestKycStatus as user to generate fees
         vm.prank(user);
         (, bytes memory feeRetData) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address)", user, address(logic))
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), defaultGasLimit)
         );
         uint256 fee = abi.decode(feeRetData, (uint256));
 

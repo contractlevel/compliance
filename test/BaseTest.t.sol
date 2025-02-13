@@ -46,6 +46,8 @@ contract BaseTest is Test {
 
     uint256 internal ethMainnetFork;
 
+    uint64 internal defaultGasLimit;
+
     /*//////////////////////////////////////////////////////////////
                                  SETUP
     //////////////////////////////////////////////////////////////*/
@@ -104,6 +106,9 @@ contract BaseTest is Test {
 
         /// @dev deploy CompliantLogic implementation
         logic = new LogicWrapper(address(compliantProxy));
+
+        /// @dev set default gas limit
+        defaultGasLimit = compliantRouter.getDefaultGasLimit();
     }
 
     /// @notice Empty test function to ignore file in coverage report
