@@ -17,7 +17,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes memory performData = abi.encode(requestId, user, address(logic), true);
+        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -74,7 +74,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes memory performData = abi.encode(requestId, user, address(logic), false); // false for not compliant
+        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, false); // false for not compliant
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -136,7 +136,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes memory performData = abi.encode(requestId, user, address(logicRevert), true);
+        bytes memory performData = abi.encode(requestId, user, address(logicRevert), defaultGasLimit, true);
 
         /// @dev call performUpkeep
         vm.recordLogs();
