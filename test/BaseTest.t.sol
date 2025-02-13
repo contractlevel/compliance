@@ -125,9 +125,9 @@ contract BaseTest is Test {
     }
 
     /// @dev set the user to pending request
-    function _setUserPendingRequest(address logicContract) internal {
+    function _setUserPendingRequest(address logicContract, uint64 gasLimit) internal {
         uint256 amount = compliantRouter.getFee();
-        bytes memory data = abi.encode(user, logicContract, defaultGasLimit);
+        bytes memory data = abi.encode(user, logicContract, gasLimit);
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 

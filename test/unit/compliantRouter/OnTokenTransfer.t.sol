@@ -89,4 +89,14 @@ contract OnTokenTransferTest is BaseTest {
         vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)")
         LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
     }
+
+    function test_compliant_onTokenTransfer_revertsWhen_maxGasLimitExceeded() public {
+        uint256 amount = compliantRouter.getFee();
+        uint64 gasLimit = compliantRouter.getMaxGasLimit() + 1;
+        bytes memory data = abi.encode(user, address(logic), gasLimit);
+
+        vm.prank(user);
+        vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__MaxGasLimitExceeded()")
+        LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
+    }
 }

@@ -7,7 +7,7 @@ import {LogicWrapperRevert} from "../../wrappers/LogicWrapperRevert.sol";
 contract PerformUpkeepTest is BaseTest {
     function test_compliant_performUpkeep_isCompliant() public {
         /// @dev set user to pending request
-        _setUserPendingRequest(address(logic));
+        _setUserPendingRequest(address(logic), defaultGasLimit);
 
         /// @dev make sure the incremented value hasnt been touched
         uint256 incrementBefore = logic.getIncrementedValue();
@@ -64,7 +64,7 @@ contract PerformUpkeepTest is BaseTest {
 
     function test_compliant_performUpkeep_isNonCompliant() public {
         /// @dev set user to pending request
-        _setUserPendingRequest(address(logic));
+        _setUserPendingRequest(address(logic), defaultGasLimit);
 
         /// @dev make sure the incremented value hasnt been touched
         uint256 incrementBefore = logic.getIncrementedValue();
@@ -132,7 +132,7 @@ contract PerformUpkeepTest is BaseTest {
     function test_compliant_performUpkeep_handles_logicRevert() public {
         /// @dev set pending request with logic implementation that will revert
         LogicWrapperRevert logicRevert = new LogicWrapperRevert(address(compliantProxy));
-        _setUserPendingRequest(address(logicRevert));
+        _setUserPendingRequest(address(logicRevert), defaultGasLimit);
 
         /// @dev create performData
         bytes32 requestId = bytes32(uint256(uint160(user)));

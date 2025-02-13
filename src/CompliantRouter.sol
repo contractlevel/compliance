@@ -467,4 +467,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function getDefaultGasLimit() external view returns (uint64) {
         return DEFAULT_GAS_LIMIT;
     }
+
+    /// @notice returns the maximum gas limit for CompliantLogic callback
+    function getMaxGasLimit() external view returns (uint64) {
+        return MAX_GAS_LIMIT;
+    }
 }

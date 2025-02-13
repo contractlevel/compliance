@@ -137,6 +137,18 @@ contract RequestKycStatusTest is BaseTest {
         vm.stopPrank();
     }
 
+    function test_compliant_requestKycStatus_revertsWhen_maxGasLimitExceeded() public {
+        uint64 gasLimit = compliantRouter.getMaxGasLimit() + 1;
+
+        vm.startPrank(user);
+        LinkTokenInterface(link).approve(address(compliantProxy), compliantRouter.getFee());
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__MaxGasLimitExceeded()"));
+        (bool success,) = address(compliantProxy).call(
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), gasLimit)
+        );
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
