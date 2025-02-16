@@ -44,6 +44,8 @@ contract MockEverestConsumer {
     mapping(bytes32 => IEverestConsumer.Request) internal s_requests;
     mapping(address revealee => IEverestConsumer.Request) internal s_requestsByRevealee;
 
+    uint256 internal s_nonce;
+
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -70,7 +72,10 @@ contract MockEverestConsumer {
             revert EverestConsumer__RevealeeShouldNotBeZeroAddress();
         }
 
-        bytes32 requestId = bytes32(uint256(uint160(_revealee)));
+        // bytes32 requestId = bytes32(uint256(uint160(_revealee)));
+        s_nonce++; // Increment the nonce to ensure uniqueness
+        bytes32 requestId = keccak256(abi.encodePacked(_revealee, s_nonce));
+
         s_requests[requestId] = s_requestsByRevealee[_revealee];
         s_latestSentRequestId = requestId;
 
@@ -133,6 +138,10 @@ contract MockEverestConsumer {
 
     function oraclePayment() external view returns (uint256 price) {
         return s_oraclePayment;
+    }
+
+    function getNonce() external view returns (uint256) {
+        return s_nonce;
     }
 
     /// @notice Empty test function to ignore file in coverage report

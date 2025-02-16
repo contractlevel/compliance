@@ -25,7 +25,7 @@ contract Harness is CompliantRouter {
 
     /// @dev create performData to pass to performUpkeep
     function performData(address user, address logic, bool isCompliant) external returns (bytes memory) {
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = bytes32(uint256(uint160(user))); // need to update this with new mock nonce mechanism
         return abi.encode(requestId, user, logic, isCompliant);
     }
 

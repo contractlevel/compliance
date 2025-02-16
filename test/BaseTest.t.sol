@@ -48,6 +48,8 @@ contract BaseTest is Test {
 
     uint64 internal defaultGasLimit;
 
+    uint256 internal requestNonce;
+
     /*//////////////////////////////////////////////////////////////
                                  SETUP
     //////////////////////////////////////////////////////////////*/
@@ -131,9 +133,12 @@ contract BaseTest is Test {
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 
+        requestNonce++;
+
         // will probably need a function like Everest's getLatestRequestId()
         // bytes32 requestId;
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        // bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(user, requestNonce));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));

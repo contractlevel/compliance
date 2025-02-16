@@ -30,7 +30,9 @@ contract OnTokenTransferTest is BaseTest {
             }
         }
 
-        bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        // bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        uint256 nonce = 1;
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, nonce));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", emittedRequestId));

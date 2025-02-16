@@ -62,6 +62,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     uint64 internal constant MAX_GAS_LIMIT = 3_000_000;
     /// @dev default gas limit for CompliantLogic callback
     uint64 internal constant DEFAULT_GAS_LIMIT = 200_000;
+    /// @dev min gas limit for CompliantLogic callback
+    uint64 internal constant MIN_GAS_LIMIT = 50_000;
 
     /// @dev Everest Chainlink Consumer
     IEverestConsumer internal immutable i_everest;
@@ -305,7 +307,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         s_pendingRequests[requestId].user = user;
         s_pendingRequests[requestId].logic = logic;
         s_pendingRequests[requestId].isPending = true;
-        if (gasLimit != 0 && gasLimit != DEFAULT_GAS_LIMIT) s_pendingRequests[requestId].gasLimit = gasLimit;
+        if (gasLimit >= MIN_GAS_LIMIT && gasLimit != DEFAULT_GAS_LIMIT) {
+            s_pendingRequests[requestId].gasLimit = gasLimit;
+        }
     }
 
     /// @dev calculates fees in LINK and handles approvals
@@ -341,7 +345,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @dev reverts if the maximum gas limit for logic callback is exceeded
-    function _revertIfMaxGasLimitExceeded(uint64 gasLimit) internal view {
+    function _revertIfMaxGasLimitExceeded(uint64 gasLimit) internal pure {
         if (gasLimit > MAX_GAS_LIMIT) revert CompliantRouter__MaxGasLimitExceeded();
     }
 
@@ -464,12 +468,17 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @notice returns the default gas limit for CompliantLogic callback
-    function getDefaultGasLimit() external view returns (uint64) {
+    function getDefaultGasLimit() external pure returns (uint64) {
         return DEFAULT_GAS_LIMIT;
     }
 
     /// @notice returns the maximum gas limit for CompliantLogic callback
-    function getMaxGasLimit() external view returns (uint64) {
+    function getMaxGasLimit() external pure returns (uint64) {
         return MAX_GAS_LIMIT;
+    }
+
+    /// @notice returns the minimum gas limit for CompliantLogic callback
+    function getMinGasLimit() external pure returns (uint64) {
+        return MIN_GAS_LIMIT;
     }
 }

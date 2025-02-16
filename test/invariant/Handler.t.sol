@@ -132,6 +132,9 @@ contract Handler is Test {
     // do we need this? is this the right kind of ghost? what do we want to track about valid logic implementation use?
     mapping(bytes32 requestId => bool isLogic) public g_requestIsLogic;
 
+    /// @dev ghost to track the nonce used to create a requestId
+    mapping(address user => uint256 requestNonce) public g_requestedUserToRequestNonce;
+
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -170,8 +173,7 @@ contract Handler is Test {
         public
     {
         /// @dev bound gasLimit
-        // review 1, this value may be too small for successful calls.
-        gasLimit = uint64(bound(gasLimit, 1, compliantRouter.getMaxGasLimit()));
+        gasLimit = uint64(bound(gasLimit, 0, compliantRouter.getMaxGasLimit()));
 
         /// @dev start request by getting a user and dealing them appropriate amount of link
         (address user, uint256 amount) = _startRequest(addressSeed, isCompliant);
@@ -287,7 +289,10 @@ contract Handler is Test {
         bool isLogic,
         uint64 gasLimit
     ) internal {
-        bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
+        if (gasLimit < compliantRouter.getMinGasLimit()) gasLimit = compliantRouter.getDefaultGasLimit();
+
+        // bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
+        bytes32 requestId = keccak256(abi.encodePacked(requestedAddress, g_requestsMade));
         bytes memory performData = abi.encode(requestId, requestedAddress, logicImplementation, gasLimit, isCompliant);
 
         vm.prank(forwarder);
@@ -333,6 +338,7 @@ contract Handler is Test {
 
         /// @dev increment requests made
         g_requestsMade++;
+        g_requestedUserToRequestNonce[user] = g_requestsMade;
 
         /// @dev update last external fees
         g_lastEverestFee = IEverestConsumer(everest).oraclePayment();
