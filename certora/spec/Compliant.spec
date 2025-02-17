@@ -125,6 +125,14 @@ ghost mathint g_nonCompliantUserEvents {
     init_state axiom g_nonCompliantUserEvents == 0;
 }
 
+ghost mathint g_gasLimit {
+    init_state axiom g_gasLimit == 0;
+}
+
+// persistent ghost mapping(address => uint64) g_gasLimit {
+//     init_state axiom forall address a. g_gasLimit[a] == 0;
+// }
+
 /*//////////////////////////////////////////////////////////////
                              HOOKS
 //////////////////////////////////////////////////////////////*/
@@ -137,6 +145,11 @@ hook Sstore s_compliantFeesInLink uint256 newValue (uint256 oldValue) {
 /// @notice update g_incrementedValue when s_incrementedValue increments
 hook Sstore logic.s_incrementedValue uint256 newValue (uint256 oldValue) {
     if (newValue > oldValue) g_incrementedValue = g_incrementedValue + 1;
+}
+
+/// @notice update g_gasLimit when s_pendingRequests.gasLimit changes
+hook Sstore s_pendingRequests[KEY bytes32 requestId].gasLimit uint64 newValue (uint64 oldValue) {
+    if (newValue != oldValue) g_gasLimit = newValue;
 }
 
 /// @notice increment g_compliantStatusRequestedEvents when CompliantStatusRequested() emitted
@@ -388,8 +401,6 @@ rule logicReverts_handled() {
     require e.msg.sender == getForwarder();
     require currentContract == getProxy();
     require logic.getSuccess() == false;
-    // require everest.getNonce() < max_uint;
-
 
     performUpkeep@withrevert(e, performData);
     assert !lastReverted;
@@ -571,4 +582,109 @@ rule compliantFeeCalculation {
     mathint fee = getCompliantFee();
     mathint expectedFee = (WAD_PRECISION() * COMPLIANT_FEE_PRECISION()) / getLatestPrice();
     assert fee == expectedFee;
+}
+
+/// @notice gas limit value should not be written to storage if it is default or below minimum value
+rule requestKycStatus_gasLimit_noStorageWrite() {
+    env e;
+    address user;
+    uint64 gasLimit;
+    require gasLimit == getDefaultGasLimit() || gasLimit < getMinGasLimit();
+
+    require g_gasLimit == 0;
+
+    requestKycStatus(e, user, logic, gasLimit);
+
+    assert g_gasLimit == 0;
+}
+
+/// @notice gas limit should write to storage if it is above minimum value and not default
+rule requestKycStatus_gasLimit_storageWrite() {
+    env e;
+    address user;
+    uint64 gasLimit;
+    require gasLimit != getDefaultGasLimit();
+    require gasLimit <= getMaxGasLimit();
+    require gasLimit >= getMinGasLimit();
+    
+    require g_gasLimit == 0;
+
+    // the requestId associated with this request is having the request[id].gasLimit havoced to gasLimit before calling
+    requestKycStatus(e, user, logic, gasLimit);
+
+    // and therefore the assertion is failing here
+    assert g_gasLimit == gasLimit;
+    assert g_gasLimit != 0;
+}
+
+/// @notice requestKycStatus should revert if max gas limit exceeded
+rule requestKycStatus_revertsWhen_maxGasLimitExceeded() {
+    env e;
+    address user;
+    uint64 gasLimit;
+    require gasLimit > getMaxGasLimit();
+    require e.msg.value == 0;
+    require e.msg.sender != registry;
+    require e.msg.sender != everest;
+    require e.msg.sender != 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) <= max_uint - getFee();
+    require link.balanceOf(e.msg.sender) >= getFee();
+    require link.allowance(e.msg.sender, currentContract) >= getFee();
+
+    requestKycStatus@withrevert(e, user, logic, gasLimit);
+    assert lastReverted;
+}
+
+/// @notice gas limit value should not be written to storage if it is default or below minimum value
+rule onTokenTransfer_gasLimit_noStorageWrite() {
+    env e;
+    address user;
+    uint64 gasLimit;
+    require gasLimit == getDefaultGasLimit() || gasLimit <= getMinGasLimit();
+
+    require g_gasLimit == 0;
+
+    // requestKycStatus(e, user, logic, gasLimit);
+
+    assert g_gasLimit == 0;
+}
+
+/// @notice gas limit should write to storage if it is above minimum value and not default
+rule onTokenTransfer_gasLimit_storageWrite() {
+    env e;
+    address user;
+    uint64 gasLimit;
+    require gasLimit != getDefaultGasLimit();
+    require gasLimit < getMaxGasLimit();
+    require gasLimit > getMinGasLimit();
+    
+    require g_gasLimit == 0;
+
+    // requestKycStatus(e, user, logic, gasLimit);
+
+    assert g_gasLimit == gasLimit;
+    assert g_gasLimit != 0;
+}
+
+/// @notice onTokenTransfer should revert if max gas limit exceeded
+rule onTokenTransfer_revertsWhen_maxGasLimitExceeded() {
+    env e;
+    address user;
+    uint256 amount;
+    uint64 gasLimit;
+    require gasLimit > getMaxGasLimit();
+    bytes data = onTokenTransferData(user, logic, gasLimit);
+    require amount >= getFee();
+    require e.msg.sender == getLink();
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() < max_uint - getCompliantFee();
+    require link.balanceOf(currentContract) >= amount;
+
+    onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert lastReverted;
 }
