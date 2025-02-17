@@ -26,6 +26,9 @@ methods {
     function getEverestFee() external returns (uint256) envfree;
     function getAutomationFee() external returns (uint96) envfree;
     function getLatestPrice() external returns (uint256) envfree;
+    function getMinGasLimit() external returns (uint64) envfree;
+    function getMaxGasLimit() external returns (uint64) envfree;
+    function getDefaultGasLimit() external returns (uint64) envfree;
 
     // External contract functions
     function everest.oraclePayment() external returns (uint256) envfree;
@@ -33,14 +36,15 @@ methods {
     function registry.getMinBalance(uint256) external returns (uint96) envfree;
     function link.balanceOf(address) external returns (uint256) envfree;
     function link.allowance(address,address) external returns (uint256) envfree;
+    function everest.getNonce() external returns (uint256) envfree;
 
     // Wildcard dispatcher summaries
     function _.compliantLogic(address,bool) external => DISPATCHER(true);
     function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
 
     // Harness helper functions
-    function onTokenTransferData(address,address) external returns (bytes) envfree;
-    function performData(address,address,bool) external returns (bytes) envfree;
+    function onTokenTransferData(address,address,uint64) external returns (bytes) envfree;
+    function performData(bytes32,address,address,bool) external returns (bytes) envfree;
     function logic.getIncrementedValue() external returns (uint256) envfree;
     function logic.getSuccess() external returns (bool) envfree;
 }
@@ -51,7 +55,7 @@ methods {
 /// @notice external functions that change state
 definition canChangeState(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,address).selector ||
+	f.selector == sig:requestKycStatus(address,address,uint64).selector ||
     f.selector == sig:performUpkeep(bytes).selector ||
     f.selector == sig:withdrawFees().selector ||
     f.selector == sig:initialize(address).selector;
@@ -59,7 +63,7 @@ definition canChangeState(method f) returns bool =
 /// @notice external functions that can be called to make request
 definition canRequestStatus(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,address).selector;
+	f.selector == sig:requestKycStatus(address,address,uint64).selector;
 
 definition CompliantStatusRequestedEvent() returns bytes32 =
 // keccak256(abi.encodePacked("CompliantStatusRequested(bytes32,address,address)"))
@@ -192,8 +196,8 @@ rule onTokenTransfer_revertsWhen_insufficientFee() {
     env e;
     address user;
     uint256 amount;
-    bytes arbitraryData;
-    bytes data = onTokenTransferData(user, logic);
+    uint64 gasLimit;
+    bytes data = onTokenTransferData(user, logic, gasLimit);
 
     require amount < getFee();
 
@@ -239,6 +243,7 @@ rule requestKycStatus_feeCalculation() {
     env e;
     address user;
     address logicAddr;
+    uint64 gasLimit;
     require link == getLink();
     require e.msg.sender != getEverest();
     require e.msg.sender != currentContract;
@@ -246,7 +251,7 @@ rule requestKycStatus_feeCalculation() {
 
     uint256 balance_before = link.balanceOf(e.msg.sender);
 
-    requestKycStatus(e, user, logicAddr);
+    requestKycStatus(e, user, logicAddr, gasLimit);
 
     uint256 balance_after = link.balanceOf(e.msg.sender);
 
@@ -259,8 +264,9 @@ rule onTokenTransfer_feeCalculation() {
     address user;
     address logicAddr;
     uint256 amount;
+    uint64 gasLimit;
     bytes data;
-    require data == onTokenTransferData(user, logicAddr);
+    require data == onTokenTransferData(user, logicAddr, gasLimit);
 
     onTokenTransfer(e, e.msg.sender, amount, data);
 
@@ -373,12 +379,15 @@ rule logicReverts_check() {
 rule logicReverts_handled() {
     env e;
     address user;
+    bytes32 requestId;
     bool isCompliant = true;
-    bytes performData = performData(user, logic, isCompliant);
+    bytes performData = performData(requestId, user, logic, isCompliant);
     require e.msg.value == 0;
     require e.msg.sender == getForwarder();
     require currentContract == getProxy();
     require logic.getSuccess() == false;
+    // require everest.getNonce() < max_uint;
+
 
     performUpkeep@withrevert(e, performData);
     assert !lastReverted;
@@ -389,7 +398,8 @@ rule logicReverts_emitsEvent() {
     env e;
     address user;
     bool isCompliant = true;
-    bytes performData = performData(user, logic, isCompliant);
+    bytes32 requestId;
+    bytes performData = performData(requestId, user, logic, isCompliant);
     require e.msg.value == 0;
     require e.msg.sender == getForwarder();
     require currentContract == getProxy();
@@ -406,7 +416,8 @@ rule compliantLogic_executes_for_compliantUser() {
     env e;
     address user;
     bool isCompliant = true;
-    bytes performData = performData(user, logic, isCompliant);
+    bytes32 requestId;
+    bytes performData = performData(requestId, user, logic, isCompliant);
 
     require logic.getSuccess() == true;
 
@@ -427,8 +438,9 @@ rule compliantLogic_executes_for_compliantUser() {
 rule compliantLogic_emitsEvent_for_nonCompliantUser() {
     env e;
     address user;
+    bytes32 requestId;
     bool isCompliant = false;
-    bytes performData = performData(user, logic, isCompliant);
+    bytes performData = performData(requestId, user, logic, isCompliant);
 
     require logic.getSuccess() == true;
     require g_nonCompliantUserEvents == 0;
@@ -442,8 +454,9 @@ rule compliantLogic_emitsEvent_for_nonCompliantUser() {
 rule compliantLogic_does_not_execute_for_nonCompliantUser() {
     env e;
     address user;
+    bytes32 requestId;
     bool isCompliant = false;
-    bytes performData = performData(user, logic, isCompliant);
+    bytes performData = performData(requestId, user, logic, isCompliant);
 
     require logic.getSuccess() == true;
 
@@ -464,8 +477,10 @@ rule onTokenTransfer_revertsWhen_logicIncompatible() {
     env e;
     address user;
     uint256 amount;
-    bytes data = onTokenTransferData(user, nonLogic);
+    uint64 gasLimit;
+    bytes data = onTokenTransferData(user, nonLogic, gasLimit);
     require amount >= getFee();
+    require gasLimit < getMaxGasLimit();
     require e.msg.sender == getLink();
     require e.msg.value == 0;
     require user != 0;
@@ -482,7 +497,9 @@ rule onTokenTransfer_noRevert() {
     env e;
     address user;
     uint256 amount;
-    bytes data = onTokenTransferData(user, logic);
+    uint64 gasLimit;
+    bytes data = onTokenTransferData(user, logic, gasLimit);
+    require gasLimit < getMaxGasLimit();
     require amount >= getFee();
     require e.msg.sender == getLink();
     require e.msg.value == 0;
@@ -490,6 +507,7 @@ rule onTokenTransfer_noRevert() {
     require currentContract == getProxy();
     require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
     require link.balanceOf(currentContract) >= amount;
+    require everest.getNonce() < max_uint;
 
     onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
     assert !lastReverted;
@@ -499,6 +517,8 @@ rule onTokenTransfer_noRevert() {
 rule requestKycStatus_noRevert() {
     env e;
     address user;
+    uint64 gasLimit;
+    require gasLimit <= getMaxGasLimit();
     require e.msg.value == 0;
     require e.msg.sender != registry;
     require e.msg.sender != everest;
@@ -509,8 +529,9 @@ rule requestKycStatus_noRevert() {
     require link.balanceOf(currentContract) <= max_uint - getFee();
     require link.balanceOf(e.msg.sender) >= getFee();
     require link.allowance(e.msg.sender, currentContract) >= getFee();
+    require everest.getNonce() < max_uint;
 
-    requestKycStatus@withrevert(e, user, logic);
+    requestKycStatus@withrevert(e, user, logic, gasLimit);
     assert !lastReverted;
 }
 
@@ -518,6 +539,8 @@ rule requestKycStatus_noRevert() {
 rule requestKycStatus_revertsWhen_logicIncompatible() {
     env e;
     address user;
+    uint64 gasLimit;
+    require gasLimit <= getMaxGasLimit();
     require e.msg.value == 0;
     require e.msg.sender != registry;
     require e.msg.sender != everest;
@@ -529,7 +552,7 @@ rule requestKycStatus_revertsWhen_logicIncompatible() {
     require link.balanceOf(e.msg.sender) >= getFee();
     require link.allowance(e.msg.sender, currentContract) >= getFee();
 
-    requestKycStatus@withrevert(e, user, nonLogic);
+    requestKycStatus@withrevert(e, user, nonLogic, gasLimit);
     assert lastReverted;
 }
 

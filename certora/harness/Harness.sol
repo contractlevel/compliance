@@ -6,6 +6,7 @@ import {IEverestConsumer} from "lib/everest-chainlink-consumer/contracts/Everest
 import {LogicWrapper} from "../../test/wrappers/LogicWrapper.sol";
 import {LogicWrapperRevert} from "../..//test/wrappers/LogicWrapperRevert.sol";
 import {ICompliantLogic} from "../../src/interfaces/ICompliantLogic.sol";
+import {MockEverestConsumer} from "../../test/mocks/MockEverestConsumer.sol";
 
 contract Harness is CompliantRouter {
     /*//////////////////////////////////////////////////////////////
@@ -19,13 +20,14 @@ contract Harness is CompliantRouter {
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
     /// @dev create data to pass to onTokenTransfer
-    function onTokenTransferData(address user, address logic) external returns (bytes memory) {
-        return abi.encode(user, logic);
+    function onTokenTransferData(address user, address logic, uint64 gasLimit) external returns (bytes memory) {
+        return abi.encode(user, logic, gasLimit);
     }
 
     /// @dev create performData to pass to performUpkeep
-    function performData(address user, address logic, bool isCompliant) external returns (bytes memory) {
-        bytes32 requestId = bytes32(uint256(uint160(user))); // need to update this with new mock nonce mechanism
+    function performData(bytes32 requestId, address user, address logic, bool isCompliant) external returns (bytes memory) {
+        // uint256 nonce = MockEverestConsumer(address(i_everest)).getNonce() - 1;
+        // bytes32 requestId = keccak256(abi.encodePacked(user, nonce));
         return abi.encode(requestId, user, logic, isCompliant);
     }
 

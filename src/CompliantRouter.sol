@@ -59,6 +59,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// this could be the max - review this
     uint256 internal constant COMPLIANT_FEE = 5e7; // 50_000_000
     /// @dev max gas limit for CompliantLogic callback
+    // @review - check performGasLimit in Chainlink Automation and whether the max should change based on that
     uint64 internal constant MAX_GAS_LIMIT = 3_000_000;
     /// @dev default gas limit for CompliantLogic callback
     uint64 internal constant DEFAULT_GAS_LIMIT = 200_000;
