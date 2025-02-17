@@ -6,7 +6,6 @@ import {IEverestConsumer} from "lib/everest-chainlink-consumer/contracts/Everest
 import {LogicWrapper} from "../../test/wrappers/LogicWrapper.sol";
 import {LogicWrapperRevert} from "../..//test/wrappers/LogicWrapperRevert.sol";
 import {ICompliantLogic} from "../../src/interfaces/ICompliantLogic.sol";
-import {MockEverestConsumer} from "../../test/mocks/MockEverestConsumer.sol";
 
 contract Harness is CompliantRouter {
     /*//////////////////////////////////////////////////////////////
@@ -25,10 +24,10 @@ contract Harness is CompliantRouter {
     }
 
     /// @dev create performData to pass to performUpkeep
-    function performData(bytes32 requestId, address user, address logic, bool isCompliant) external returns (bytes memory) {
-        // uint256 nonce = MockEverestConsumer(address(i_everest)).getNonce() - 1;
-        // bytes32 requestId = keccak256(abi.encodePacked(user, nonce));
-        return abi.encode(requestId, user, logic, isCompliant);
+    function performData(bytes32 requestId, address user, address logic, uint64 gasLimit, bool isCompliant) 
+        external returns (bytes memory) 
+    {
+        return abi.encode(requestId, user, logic, gasLimit, isCompliant);
     }
 
     /// @dev wrapper for _getLatestPrice() internal

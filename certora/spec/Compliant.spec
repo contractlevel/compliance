@@ -44,7 +44,7 @@ methods {
 
     // Harness helper functions
     function onTokenTransferData(address,address,uint64) external returns (bytes) envfree;
-    function performData(bytes32,address,address,bool) external returns (bytes) envfree;
+    function performData(bytes32,address,address,uint64,bool) external returns (bytes) envfree;
     function logic.getIncrementedValue() external returns (uint256) envfree;
     function logic.getSuccess() external returns (bool) envfree;
 }
@@ -380,8 +380,10 @@ rule logicReverts_handled() {
     env e;
     address user;
     bytes32 requestId;
+    uint64 gasLimit;
     bool isCompliant = true;
-    bytes performData = performData(requestId, user, logic, isCompliant);
+    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
+    require gasLimit <= getMaxGasLimit();
     require e.msg.value == 0;
     require e.msg.sender == getForwarder();
     require currentContract == getProxy();
@@ -398,8 +400,10 @@ rule logicReverts_emitsEvent() {
     env e;
     address user;
     bool isCompliant = true;
+    uint64 gasLimit;
     bytes32 requestId;
-    bytes performData = performData(requestId, user, logic, isCompliant);
+    require gasLimit <= getMaxGasLimit();
+    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
     require e.msg.value == 0;
     require e.msg.sender == getForwarder();
     require currentContract == getProxy();
@@ -417,7 +421,9 @@ rule compliantLogic_executes_for_compliantUser() {
     address user;
     bool isCompliant = true;
     bytes32 requestId;
-    bytes performData = performData(requestId, user, logic, isCompliant);
+    uint64 gasLimit;
+    require gasLimit <= getMaxGasLimit();
+    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
 
     require logic.getSuccess() == true;
 
@@ -439,8 +445,10 @@ rule compliantLogic_emitsEvent_for_nonCompliantUser() {
     env e;
     address user;
     bytes32 requestId;
+    uint64 gasLimit;
     bool isCompliant = false;
-    bytes performData = performData(requestId, user, logic, isCompliant);
+    require gasLimit <= getMaxGasLimit();
+    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
 
     require logic.getSuccess() == true;
     require g_nonCompliantUserEvents == 0;
@@ -456,7 +464,9 @@ rule compliantLogic_does_not_execute_for_nonCompliantUser() {
     address user;
     bytes32 requestId;
     bool isCompliant = false;
-    bytes performData = performData(requestId, user, logic, isCompliant);
+    uint64 gasLimit;
+    require gasLimit <= getMaxGasLimit();
+    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
 
     require logic.getSuccess() == true;
 
