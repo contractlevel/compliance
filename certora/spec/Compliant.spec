@@ -47,6 +47,7 @@ methods {
     function performData(bytes32,address,address,uint64,bool) external returns (bytes) envfree;
     function logic.getIncrementedValue() external returns (uint256) envfree;
     function logic.getSuccess() external returns (bool) envfree;
+    function requestId(address) external returns (bytes32) envfree;
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -125,13 +126,10 @@ ghost mathint g_nonCompliantUserEvents {
     init_state axiom g_nonCompliantUserEvents == 0;
 }
 
+/// @notice track the gasLimit stored in a pending request
 ghost mathint g_gasLimit {
     init_state axiom g_gasLimit == 0;
 }
-
-// persistent ghost mapping(address => uint64) g_gasLimit {
-//     init_state axiom forall address a. g_gasLimit[a] == 0;
-// }
 
 /*//////////////////////////////////////////////////////////////
                              HOOKS
@@ -609,10 +607,12 @@ rule requestKycStatus_gasLimit_storageWrite() {
     
     require g_gasLimit == 0;
 
-    // the requestId associated with this request is having the request[id].gasLimit havoced to gasLimit before calling
+    bytes32 requestId = requestId(user);
+    CompliantRouter.PendingRequest request = getPendingRequest(requestId);
+    require request.gasLimit == 0;
+
     requestKycStatus(e, user, logic, gasLimit);
 
-    // and therefore the assertion is failing here
     assert g_gasLimit == gasLimit;
     assert g_gasLimit != 0;
 }
@@ -642,12 +642,14 @@ rule requestKycStatus_revertsWhen_maxGasLimitExceeded() {
 rule onTokenTransfer_gasLimit_noStorageWrite() {
     env e;
     address user;
+    uint256 amount;
     uint64 gasLimit;
-    require gasLimit == getDefaultGasLimit() || gasLimit <= getMinGasLimit();
+    require gasLimit == getDefaultGasLimit() || gasLimit < getMinGasLimit();
+    bytes data = onTokenTransferData(user, logic, gasLimit);
 
     require g_gasLimit == 0;
 
-    // requestKycStatus(e, user, logic, gasLimit);
+    onTokenTransfer(e, e.msg.sender, amount, data);
 
     assert g_gasLimit == 0;
 }
@@ -656,14 +658,19 @@ rule onTokenTransfer_gasLimit_noStorageWrite() {
 rule onTokenTransfer_gasLimit_storageWrite() {
     env e;
     address user;
+    uint256 amount;
     uint64 gasLimit;
     require gasLimit != getDefaultGasLimit();
     require gasLimit < getMaxGasLimit();
     require gasLimit > getMinGasLimit();
+    bytes data = onTokenTransferData(user, logic, gasLimit);
     
+    bytes32 requestId = requestId(user);
+    CompliantRouter.PendingRequest request = getPendingRequest(requestId);
+    require request.gasLimit == 0;
     require g_gasLimit == 0;
 
-    // requestKycStatus(e, user, logic, gasLimit);
+    onTokenTransfer(e, e.msg.sender, amount, data);
 
     assert g_gasLimit == gasLimit;
     assert g_gasLimit != 0;

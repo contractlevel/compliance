@@ -4,8 +4,9 @@ pragma solidity 0.8.24;
 import {CompliantRouter} from "../../src/CompliantRouter.sol";
 import {IEverestConsumer} from "lib/everest-chainlink-consumer/contracts/EverestConsumer.sol";
 import {LogicWrapper} from "../../test/wrappers/LogicWrapper.sol";
-import {LogicWrapperRevert} from "../..//test/wrappers/LogicWrapperRevert.sol";
+import {LogicWrapperRevert} from "../../test/wrappers/LogicWrapperRevert.sol";
 import {ICompliantLogic} from "../../src/interfaces/ICompliantLogic.sol";
+import {MockEverestConsumer} from "../../test/mocks/MockEverestConsumer.sol";
 
 contract Harness is CompliantRouter {
     /*//////////////////////////////////////////////////////////////
@@ -28,6 +29,12 @@ contract Harness is CompliantRouter {
         external returns (bytes memory) 
     {
         return abi.encode(requestId, user, logic, gasLimit, isCompliant);
+    }
+
+    /// @dev predict requestId
+    function requestId(address user) external returns (bytes32) {
+        uint256 nonce = MockEverestConsumer(address(i_everest)).getNonce() + 1;
+        return keccak256(abi.encodePacked(user, nonce));
     }
 
     /// @dev wrapper for _getLatestPrice() internal
