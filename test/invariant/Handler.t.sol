@@ -560,4 +560,7 @@ contract Handler is Test {
 
         return amount;
     }
+
+    /// @notice Empty test function to ignore file in coverage report
+    function test_handler() public {}
 }
