@@ -211,7 +211,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
             /// @dev revert if request's logic contract does not implement ICompliantLogic interface
             /// @notice this check is a bit redundant because we already do it, but checkLog costs no gas so may as well
-            // review maybe we want to remove this check to allow performUpkeep to update request.isPending storage
+            // review maybe we want to remove this check. probably doesnt matter if we verified requests revert if not logic
             address logic = request.logic;
             _revertIfNotCompliantLogic(logic);
 

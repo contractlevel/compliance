@@ -183,6 +183,12 @@ hook LOG2(uint offset, uint length, bytes32 t0, bytes32 t1) {
 invariant feesAccounting()
     to_mathint(getCompliantFeesToWithdraw()) == g_totalFeesEarned - g_totalFeesWithdrawn;
 
+/// @notice gas limit must be within the min and max gas limit bounds
+invariant pendingRequest_gasLimit_valid(bytes32 requestId)
+    getPendingRequest(requestId).gasLimit == 0 || 
+    (getPendingRequest(requestId).gasLimit >= getMinGasLimit() && 
+     getPendingRequest(requestId).gasLimit <= getMaxGasLimit());
+
 /*//////////////////////////////////////////////////////////////
                              RULES
 //////////////////////////////////////////////////////////////*/
