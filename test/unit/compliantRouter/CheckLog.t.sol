@@ -12,11 +12,11 @@ contract CheckLogTest is BaseTest {
                                  TESTS
     //////////////////////////////////////////////////////////////*/
     /// @notice this test should be commented out if the cannotExecute modifier is removed from checkLog
-    // function test_compliant_checkLog_revertsWhen_called() public {
-    //     Log memory log = _createLog(true, address(compliantRouter), user);
-    //     vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
-    //     compliantRouter.checkLog(log, "");
-    // }
+    function test_compliant_checkLog_revertsWhen_called() public {
+        Log memory log = _createLog(true, address(compliantRouter), user);
+        vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
+        compliantRouter.checkLog(log, "");
+    }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_notProxy() public {
@@ -137,6 +137,38 @@ contract CheckLogTest is BaseTest {
         /// @dev check log
         Log memory log = _createLog(true, address(compliantProxy), invalidUser);
         vm.expectRevert(abi.encodeWithSignature("CompliantRouter__InvalidUser()"));
+        (, bytes memory retData) = address(compliantProxy).call(
+            abi.encodeWithSignature(
+                "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
+            )
+        );
+    }
+
+    /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
+    function test_compliant_checkLog_revertsWhen_invalidLogSource() public {
+        /// @dev set user to pending request
+        _setUserPendingRequest(address(logic), defaultGasLimit);
+
+        /// @dev check log
+        Log memory log = _createLog(true, address(compliantProxy), user);
+        log.source = address(0);
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__InvalidLog()"));
+        (, bytes memory retData) = address(compliantProxy).call(
+            abi.encodeWithSignature(
+                "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
+            )
+        );
+    }
+
+    /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
+    function test_compliant_checkLog_revertsWhen_invalidLogEvent() public {
+        /// @dev set user to pending request
+        _setUserPendingRequest(address(logic), defaultGasLimit);
+
+        /// @dev check log
+        Log memory log = _createLog(true, address(compliantProxy), user);
+        log.topics[0] = keccak256("InvalidEvent");
+        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__InvalidLog()"));
         (, bytes memory retData) = address(compliantProxy).call(
             abi.encodeWithSignature(
                 "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""

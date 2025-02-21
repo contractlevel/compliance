@@ -48,6 +48,7 @@ methods {
     function logic.getIncrementedValue() external returns (uint256) envfree;
     function logic.getSuccess() external returns (bool) envfree;
     function requestId(address) external returns (bytes32) envfree;
+    function createLog(bytes32,bool,address,address,address) external returns (CompliantRouter.Log);
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -81,6 +82,11 @@ definition CompliantLogicExecutionFailedEvent() returns bytes32 =
 definition NonCompliantUserEvent() returns bytes32 =
 // keccak256(abi.encodePacked("NonCompliantUser(address)"))
     to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
+
+definition EverestFulfilledEvent() returns bytes32 =
+// keccak256(abi.encodePacked("Fulfilled(bytes32,address,address,uint8,uint40)"))
+// keccak256("Fulfilled(bytes32,address,address,uint8,uint40)")
+    to_bytes32(0x6d3b3a10e0131f9c51ce77634a8b45197a7e81e3577f98cbe02df2752fe20024);
 
 /// @notice 1e18
 definition WAD_PRECISION() returns uint256 = 1000000000000000000;
@@ -693,5 +699,55 @@ rule onTokenTransfer_revertsWhen_maxGasLimitExceeded() {
     require link.balanceOf(currentContract) >= amount;
 
     onTokenTransfer@withrevert(e, e.msg.sender, amount, data);
+    assert lastReverted;
+}
+
+/// @notice checkLog should revert if not called via proxy
+rule checkLog_revertsWhen_notProxy() {
+    env e;
+    calldataarg args;
+    require currentContract != getProxy();
+    require e.tx.origin == 0 || e.tx.origin == 0x1111111111111111111111111111111111111111;
+
+    checkLog@withrevert(e, args);
+    assert lastReverted;
+}
+
+/// @notice checkLog should revert if the log did not come from Everest
+rule checkLog_revertsWhen_invalidLogSource() {
+    env e;
+    address user;
+    bytes32 requestId = requestId(user);
+    bool isCompliant;
+    address invalidSource;
+    bytes32 eventSignature = EverestFulfilledEvent();
+    bytes data;
+
+    require invalidSource != everest;
+    require e.tx.origin == 0 || e.tx.origin == 0x1111111111111111111111111111111111111111;
+    require currentContract == getProxy();
+
+    CompliantRouter.Log log = createLog(e, requestId, isCompliant, currentContract, user, invalidSource, eventSignature);
+
+    checkLog@withrevert(e, log, data);
+    assert lastReverted;
+}
+
+/// @notice checkLog should revert if the log does not match the Fulfilled event
+rule checkLog_revertsWhen_invalidLogEvent() {
+    env e;
+    address user;
+    bytes32 requestId = requestId(user);
+    bool isCompliant;
+    bytes32 invalidEvent;
+    bytes data;
+
+    require invalidEvent != EverestFulfilledEvent();
+    require e.tx.origin == 0 || e.tx.origin == 0x1111111111111111111111111111111111111111;
+    require currentContract == getProxy();
+
+    CompliantRouter.Log log = createLog(e, requestId, isCompliant, currentContract, user, everest, invalidEvent);
+
+    checkLog@withrevert(e, log, data);
     assert lastReverted;
 }

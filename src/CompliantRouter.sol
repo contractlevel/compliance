@@ -36,6 +36,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__InvalidUser();
     error CompliantRouter__RequestNotPending();
     error CompliantRouter__MaxGasLimitExceeded();
+    error CompliantRouter__InvalidLog();
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
@@ -230,6 +231,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                 performData = abi.encode(requestId, user, logic, gasLimit, isCompliant);
                 upkeepNeeded = true;
             }
+        } else {
+            /// @dev revert if the log is not a Fulfilled event from the EverestConsumer contract
+            revert CompliantRouter__InvalidLog();
         }
     }
 
