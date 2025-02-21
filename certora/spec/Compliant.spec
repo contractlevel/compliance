@@ -751,3 +751,23 @@ rule checkLog_revertsWhen_invalidLogEvent() {
     checkLog@withrevert(e, log, data);
     assert lastReverted;
 }
+
+/// @notice checkLog should revert if the revealer address is not the Router/currentContract
+rule checkLog_revertsWhen_invalidRevealer() {
+    env e;
+    address user;
+    bytes32 requestId = requestId(user);
+    bool isCompliant;
+    bytes32 eventSignature = EverestFulfilledEvent();
+    bytes data;
+    address invalidRevealer;
+
+    require e.tx.origin == 0 || e.tx.origin == 0x1111111111111111111111111111111111111111;
+    require currentContract == getProxy();
+    require invalidRevealer != currentContract;
+
+    CompliantRouter.Log log = createLog(e, requestId, isCompliant, invalidRevealer, user, everest, eventSignature);
+
+    checkLog@withrevert(e, log, data);
+    assert lastReverted;
+}
