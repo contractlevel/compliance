@@ -18,7 +18,7 @@ contract LogicWrapper is CompliantLogic {
     /*//////////////////////////////////////////////////////////////
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
-    function _compliantLogic(address user) internal override {
+    function _executeLogic(address user) internal override {
         s_incrementedValue++;
         s_userToIncrements[user]++;
     }

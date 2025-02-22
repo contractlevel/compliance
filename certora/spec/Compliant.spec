@@ -39,7 +39,7 @@ methods {
     function everest.getNonce() external returns (uint256) envfree;
 
     // Wildcard dispatcher summaries
-    function _.compliantLogic(address,bool) external => DISPATCHER(true);
+    function _.executeLogic(address) external => DISPATCHER(true);
     function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
 
     // Harness helper functions
@@ -78,10 +78,6 @@ definition CompliantStatusFulfilledEvent() returns bytes32 =
 definition CompliantLogicExecutionFailedEvent() returns bytes32 =
 // keccak256(abi.encodePacked("CompliantLogicExecutionFailed(bytes32,address,address,bool,bytes)"))
     to_bytes32(0xf26409c317494206f6feac40c1676f1481f66716e008e26a4b09511c63fb16bb);
-
-definition NonCompliantUserEvent() returns bytes32 =
-// keccak256(abi.encodePacked("NonCompliantUser(address)"))
-    to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
 
 definition EverestFulfilledEvent() returns bytes32 =
 // keccak256(abi.encodePacked("Fulfilled(bytes32,address,address,uint8,uint40)"))
@@ -388,12 +384,11 @@ rule requests_fundRegistry(method f) filtered {f -> canRequestStatus(f)} {
 /// @notice sanity check to make sure the logicRevert implementation does revert as expected
 rule logicReverts_check() {
     env e;
-    require e.msg.sender == currentContract;
     address user;
-    bool isCompliant = true;
+    require e.msg.sender == currentContract;
     require logic.getSuccess() == false;
 
-    logic.compliantLogic@withrevert(e, user, isCompliant);
+    logic.executeLogic@withrevert(e, user);
     assert lastReverted;
 }
 
@@ -458,24 +453,6 @@ rule compliantLogic_executes_for_compliantUser() {
 
     assert valueAfter == valueBefore + 1;
     assert ghostAfter == ghostBefore + 1;
-}
-
-/// @notice CompliantLogic must emit NonCompliantUser() event for non compliant users
-rule compliantLogic_emitsEvent_for_nonCompliantUser() {
-    env e;
-    address user;
-    bytes32 requestId;
-    uint64 gasLimit;
-    bool isCompliant = false;
-    require gasLimit <= getMaxGasLimit();
-    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
-
-    require logic.getSuccess() == true;
-    require g_nonCompliantUserEvents == 0;
-
-    performUpkeep(e, performData);
-
-    assert g_nonCompliantUserEvents == 1;
 }
 
 /// @notice CompliantLogic restricted logic must not be executed on behalf of non compliant users
