@@ -139,3 +139,4 @@ Each significant iteration of this project has been archived in its own branch.
 - **2024-12-23** - Foundry invariant tests and Certora
 - **2024-12-31** - Calldata compression with Solady.LibZip
 - **2025-01-23** - Framework separated into Router and Logic
+- **2025-02-22** - Gas limit on Logic callback
