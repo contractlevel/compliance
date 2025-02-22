@@ -85,7 +85,6 @@ definition NonCompliantUserEvent() returns bytes32 =
 
 definition EverestFulfilledEvent() returns bytes32 =
 // keccak256(abi.encodePacked("Fulfilled(bytes32,address,address,uint8,uint40)"))
-// keccak256("Fulfilled(bytes32,address,address,uint8,uint40)")
     to_bytes32(0x6d3b3a10e0131f9c51ce77634a8b45197a7e81e3577f98cbe02df2752fe20024);
 
 /// @notice 1e18
