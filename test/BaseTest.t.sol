@@ -46,6 +46,10 @@ contract BaseTest is Test {
 
     uint256 internal ethMainnetFork;
 
+    uint64 internal defaultGasLimit;
+
+    uint256 internal requestNonce;
+
     /*//////////////////////////////////////////////////////////////
                                  SETUP
     //////////////////////////////////////////////////////////////*/
@@ -104,6 +108,9 @@ contract BaseTest is Test {
 
         /// @dev deploy CompliantLogic implementation
         logic = new LogicWrapper(address(compliantProxy));
+
+        /// @dev set default gas limit
+        defaultGasLimit = compliantRouter.getDefaultGasLimit();
     }
 
     /// @notice Empty test function to ignore file in coverage report
@@ -120,15 +127,18 @@ contract BaseTest is Test {
     }
 
     /// @dev set the user to pending request
-    function _setUserPendingRequest(address logicContract) internal {
+    function _setUserPendingRequest(address logicContract, uint64 gasLimit) internal {
         uint256 amount = compliantRouter.getFee();
-        bytes memory data = abi.encode(user, logicContract);
+        bytes memory data = abi.encode(user, logicContract, gasLimit);
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 
+        requestNonce++;
+
         // will probably need a function like Everest's getLatestRequestId()
         // bytes32 requestId;
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        // bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(user, requestNonce));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));

@@ -35,17 +35,21 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__LinkTransferFailed();
     error CompliantRouter__InvalidUser();
     error CompliantRouter__RequestNotPending();
+    error CompliantRouter__MaxGasLimitExceeded();
+    error CompliantRouter__InvalidLog();
 
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
     //////////////////////////////////////////////////////////////*/
-    /// @notice this struct is only used for requests that are pending Chainlink Automation
+    /// @notice this struct is used for requests that are pending Chainlink Automation
     /// @param user who's compliant status is being requested
     /// @param logic the CompliantLogic contract implemented and passed by the requester
+    /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
     /// @param isPending if this is true and a Fulfilled event is emitted by Everest, Chainlink Automation will perform
     struct PendingRequest {
         address user;
         address logic;
+        uint64 gasLimit;
         bool isPending;
     }
 
@@ -55,6 +59,13 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @notice this value could be something different or even configurable
     /// this could be the max - review this
     uint256 internal constant COMPLIANT_FEE = 5e7; // 50_000_000
+    /// @dev max gas limit for CompliantLogic callback
+    // @review - check performGasLimit in Chainlink Automation and whether the max should change based on that
+    uint64 internal constant MAX_GAS_LIMIT = 3_000_000;
+    /// @dev default gas limit for CompliantLogic callback
+    uint64 internal constant DEFAULT_GAS_LIMIT = 200_000;
+    /// @dev min gas limit for CompliantLogic callback
+    uint64 internal constant MIN_GAS_LIMIT = 50_000;
 
     /// @dev Everest Chainlink Consumer
     IEverestConsumer internal immutable i_everest;
@@ -137,27 +148,30 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     ) external onlyProxy {
         if (msg.sender != address(i_link)) revert CompliantRouter__OnlyLinkToken();
 
-        (address user, address logic) = abi.decode(data, (address, address));
+        (address user, address logic, uint64 gasLimit) = abi.decode(data, (address, address, uint64));
 
         _revertIfNotCompliantLogic(logic);
+        _revertIfMaxGasLimitExceeded(gasLimit);
 
         uint256 fees = _handleFees(true); // true for isOnTokenTransfer
         if (amount < fees) {
             revert CompliantRouter__InsufficientLinkTransferAmount(fees);
         }
 
-        _requestKycStatus(user, logic);
+        _requestKycStatus(user, logic, gasLimit);
     }
 
     /// @notice anyone can call this function to request the KYC status of their address
     /// @notice msg.sender must approve address(this) on LINK token contract
     /// @param user address to request kyc status of
     /// @param logic CompliantLogic contract to call when request is fulfilled
-    function requestKycStatus(address user, address logic) external onlyProxy returns (uint256) {
+    /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
+    function requestKycStatus(address user, address logic, uint64 gasLimit) external onlyProxy returns (uint256) {
         _revertIfNotCompliantLogic(logic);
+        _revertIfMaxGasLimitExceeded(gasLimit);
 
         uint256 fee = _handleFees(false); // false for isOnTokenTransfer
-        _requestKycStatus(user, logic);
+        _requestKycStatus(user, logic, gasLimit);
         return fee;
     }
 
@@ -197,6 +211,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
             /// @dev revert if request's logic contract does not implement ICompliantLogic interface
             /// @notice this check is a bit redundant because we already do it, but checkLog costs no gas so may as well
+            // review maybe we want to remove this check. probably doesnt matter if we verified requests revert if not logic
             address logic = request.logic;
             _revertIfNotCompliantLogic(logic);
 
@@ -207,10 +222,19 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             /// @dev revert if request is not pending
             if (!request.isPending) revert CompliantRouter__RequestNotPending();
 
+            /// @dev get the gas limit for logic callback
+            //slither-disable-next-line uninitialized-local
+            uint64 gasLimit;
+            if (request.gasLimit == 0) gasLimit = DEFAULT_GAS_LIMIT;
+            else gasLimit = request.gasLimit;
+
             if (request.isPending) {
-                performData = abi.encode(requestId, user, logic, isCompliant);
+                performData = abi.encode(requestId, user, logic, gasLimit, isCompliant);
                 upkeepNeeded = true;
             }
+        } else {
+            /// @dev revert if the log is not a Fulfilled event from the EverestConsumer contract
+            revert CompliantRouter__InvalidLog();
         }
     }
 
@@ -221,17 +245,22 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         if (msg.sender != address(i_forwarder)) {
             revert CompliantRouter__OnlyForwarder();
         }
-        (bytes32 requestId, address user, address logic, bool isCompliant) =
-            abi.decode(performData, (bytes32, address, address, bool));
+
+        (bytes32 requestId, address user, address logic, uint64 gasLimit, bool isCompliant) =
+            abi.decode(performData, (bytes32, address, address, uint64, bool));
 
         s_pendingRequests[requestId].isPending = false;
 
         emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
+        bytes memory callData = abi.encodeWithSelector(ICompliantLogic.compliantLogic.selector, user, isCompliant);
+
+        // Perform the low-level call with the gas limit
+        (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
+
         /// @dev if logic implementation reverts, complete tx with event indicating as such
-        // review this needs a gasLimit!
-        try ICompliantLogic(logic).compliantLogic(user, isCompliant) {}
-        catch (bytes memory err) {
+        if (!success) {
+            // Emit an event to log the failure
             emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
         }
     }
@@ -260,12 +289,13 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev requests the kyc status of the user
     /// @param user who's status to request
     /// @param logic CompliantLogic contract to call when request is fulfilled
-    function _requestKycStatus(address user, address logic) internal {
+    /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
+    function _requestKycStatus(address user, address logic, uint64 gasLimit) internal {
         i_everest.requestStatus(user);
 
         bytes32 requestId = i_everest.getLatestSentRequestId();
 
-        _setPendingRequest(requestId, user, logic);
+        _setPendingRequest(requestId, user, logic, gasLimit);
 
         emit CompliantStatusRequested(requestId, user, logic);
 
@@ -277,10 +307,15 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @param requestId unique identifier for request returned from everest chainlink client
     /// @param user who's status to request
     /// @param logic CompliantLogic contract to call when request is fulfilled
-    function _setPendingRequest(bytes32 requestId, address user, address logic) internal {
+    /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
+    function _setPendingRequest(bytes32 requestId, address user, address logic, uint64 gasLimit) internal {
+        // review - do we even need to write user to storage?
         s_pendingRequests[requestId].user = user;
         s_pendingRequests[requestId].logic = logic;
         s_pendingRequests[requestId].isPending = true;
+        if (gasLimit >= MIN_GAS_LIMIT && gasLimit != DEFAULT_GAS_LIMIT) {
+            s_pendingRequests[requestId].gasLimit = gasLimit;
+        }
     }
 
     /// @dev calculates fees in LINK and handles approvals
@@ -313,6 +348,11 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @dev reverts if logic does not implement expected interface
     function _revertIfNotCompliantLogic(address logic) internal view {
         if (!_isCompliantLogic(logic)) revert CompliantRouter__NotCompliantLogic(logic);
+    }
+
+    /// @dev reverts if the maximum gas limit for logic callback is exceeded
+    function _revertIfMaxGasLimitExceeded(uint64 gasLimit) internal pure {
+        if (gasLimit > MAX_GAS_LIMIT) revert CompliantRouter__MaxGasLimitExceeded();
     }
 
     /// @dev checks if the user is compliant
@@ -431,5 +471,20 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     /// @notice returns true if a contract address implements CompliantLogic interface
     function getIsCompliantLogic(address logic) external view returns (bool) {
         return _isCompliantLogic(logic);
+    }
+
+    /// @notice returns the default gas limit for CompliantLogic callback
+    function getDefaultGasLimit() external pure returns (uint64) {
+        return DEFAULT_GAS_LIMIT;
+    }
+
+    /// @notice returns the maximum gas limit for CompliantLogic callback
+    function getMaxGasLimit() external pure returns (uint64) {
+        return MAX_GAS_LIMIT;
+    }
+
+    /// @notice returns the minimum gas limit for CompliantLogic callback
+    function getMinGasLimit() external pure returns (uint64) {
+        return MIN_GAS_LIMIT;
     }
 }

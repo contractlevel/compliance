@@ -9,7 +9,7 @@ contract OnTokenTransferTest is BaseTest {
         uint256 amount = compliantRouter.getFee();
 
         /// @dev requesting the kyc status of user and passing the logic address for callback
-        bytes memory data = abi.encode(user, address(logic));
+        bytes memory data = abi.encode(user, address(logic), defaultGasLimit);
 
         vm.recordLogs();
 
@@ -30,7 +30,9 @@ contract OnTokenTransferTest is BaseTest {
             }
         }
 
-        bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        // bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        uint256 nonce = 1;
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, nonce));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", emittedRequestId));
@@ -63,7 +65,7 @@ contract OnTokenTransferTest is BaseTest {
         vm.startPrank(user);
         uint256 fee = compliantRouter.getFee();
         uint256 amount = fee - 1;
-        bytes memory data = abi.encode(user, address(logic));
+        bytes memory data = abi.encode(user, address(logic), defaultGasLimit);
 
         // abi.encodeWithSignature("CompliantRouter__InsufficientLinkTransferAmount(uint256,uint256)", amount, fee)
         vm.expectRevert();
@@ -73,7 +75,7 @@ contract OnTokenTransferTest is BaseTest {
 
     function test_compliant_onTokenTransfer_revertsWhen_notProxy() public {
         uint256 amount = compliantRouter.getFee();
-        bytes memory data = abi.encode(user, address(logic));
+        bytes memory data = abi.encode(user, address(logic), defaultGasLimit);
 
         vm.prank(user);
         vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__OnlyProxy()")
@@ -83,10 +85,20 @@ contract OnTokenTransferTest is BaseTest {
     function test_compliant_onTokenTransfer_revertsWhen_logicIncompatible() public {
         uint256 amount = compliantRouter.getFee();
         address nonLogic = address(compliantRouter);
-        bytes memory data = abi.encode(user, nonLogic);
+        bytes memory data = abi.encode(user, nonLogic, defaultGasLimit);
 
         vm.prank(user);
         vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)")
         LinkTokenInterface(link).transferAndCall(address(compliantRouter), amount, data);
+    }
+
+    function test_compliant_onTokenTransfer_revertsWhen_maxGasLimitExceeded() public {
+        uint256 amount = compliantRouter.getFee();
+        uint64 gasLimit = compliantRouter.getMaxGasLimit() + 1;
+        bytes memory data = abi.encode(user, address(logic), gasLimit);
+
+        vm.prank(user);
+        vm.expectRevert(); // abi.encodeWithSignature("CompliantRouter__MaxGasLimitExceeded()")
+        LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
     }
 }

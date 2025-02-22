@@ -99,6 +99,9 @@ contract Invariant is StdInvariant, BaseTest {
         logic = new LogicWrapper(address(compliantProxy));
         logicRevert = new LogicWrapperRevert(address(compliantProxy));
 
+        /// @dev set default gas limit
+        defaultGasLimit = compliantRouter.getDefaultGasLimit();
+
         //-----------------------------------------------------------------------------------------------
 
         /// @dev deploy handler
@@ -239,8 +242,10 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     function checkForwarderCanCallPerformUpkeep(address user) external {
-        bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes memory performData = abi.encode(requestId, user, address(logic), true);
+        // bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(user, handler.g_requestsMade()));
+
+        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
 
         vm.prank(forwarder);
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
@@ -268,7 +273,9 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     function checkCompliantStatusRequestedEvent(address user) external view {
-        bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        // bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
+        uint256 nonce = handler.g_requestedUserToRequestNonce(user);
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, nonce));
 
         if (handler.g_requestedUsers(user)) {
             assertEq(
@@ -405,6 +412,29 @@ contract Invariant is StdInvariant, BaseTest {
             handler.g_compliantFulfilledEventIsCompliant(user) == handler.g_nonCompliantUserEvent(user),
             "Invariant violated: NonCompliantUser event should only be emitted when user is non compliant."
         );
+    }
+
+    // Gas Limit:
+    /// @dev Less than minimum or default gas limit should not write to storage
+    function invariant_gasLimit_noStorageWrite() public {
+        handler.forEachRequestId(this.checkGasLimitStorage);
+    }
+
+    function checkGasLimitStorage(bytes32 requestId) external {
+        (, bytes memory retData) =
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
+        CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
+
+        if (
+            handler.g_requestIdToGasLimit(requestId) == defaultGasLimit
+                || handler.g_requestIdToGasLimit(requestId) < compliantRouter.getMinGasLimit()
+        ) {
+            assertEq(
+                request.gasLimit,
+                0,
+                "Invariant violated: Less than minimum or default gas limit should not write to storage."
+            );
+        }
     }
 
     // we want to assert that our performUpkeep is always a success when the logic implementation reverts

@@ -45,6 +45,8 @@ contract Handler is Test {
     LogicWrapper public logic;
     /// @dev CompliantLogic reverting implementation
     LogicWrapperRevert public logicRevert;
+    /// @dev DEFAULT_GAS_LIMIT for logic callback
+    uint64 public defaultGasLimit;
 
     /// @dev track the users in the system (requestedAddresses)
     EnumerableSet.AddressSet internal users;
@@ -119,6 +121,8 @@ contract Handler is Test {
     mapping(bytes32 requestId => bool isPending) public g_pendingRequests;
     /// @dev ghost to track requestId to user
     mapping(bytes32 requestId => address user) public g_requestIdToUser;
+    /// @dev ghost to track requestId to gasLimit
+    mapping(bytes32 requestId => uint64 gasLimit) public g_requestIdToGasLimit;
 
     /// @dev ghost to track CompliantLogic.NonCompliantUser events
     /// @notice this is true if NONCompliant!
@@ -127,6 +131,9 @@ contract Handler is Test {
     /// @dev ghost to track the requestId to whether the request is to valid logic implementation
     // do we need this? is this the right kind of ghost? what do we want to track about valid logic implementation use?
     mapping(bytes32 requestId => bool isLogic) public g_requestIsLogic;
+
+    /// @dev ghost to track the nonce used to create a requestId
+    mapping(address user => uint256 requestNonce) public g_requestedUserToRequestNonce;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -155,13 +162,19 @@ contract Handler is Test {
         upkeepId = _upkeepId;
         logic = _logic;
         logicRevert = _logicRevert;
+        defaultGasLimit = compliantRouter.getDefaultGasLimit();
     }
 
     /*//////////////////////////////////////////////////////////////
                                 EXTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @dev simulate onTokenTransfer or requestKycStatus
-    function sendRequest(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic) public {
+    function sendRequest(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic, uint64 gasLimit)
+        public
+    {
+        /// @dev bound gasLimit
+        gasLimit = uint64(bound(gasLimit, 0, compliantRouter.getMaxGasLimit()));
+
         /// @dev start request by getting a user and dealing them appropriate amount of link
         (address user, uint256 amount) = _startRequest(addressSeed, isCompliant);
         users.add(user);
@@ -176,7 +189,7 @@ contract Handler is Test {
         /// @dev send request with isOnTokenTransfer or requestKycStatus
         if (isOnTokenTransfer) {
             /// @dev create calldata for transferAndCall request
-            bytes memory data = abi.encode(user, logicImplementation);
+            bytes memory data = abi.encode(user, logicImplementation, gasLimit);
             /// @dev send request with onTokenTransfer
             vm.startPrank(user);
             bool success =
@@ -189,7 +202,7 @@ contract Handler is Test {
             LinkTokenInterface(compliantRouter.getLink()).approve(address(compliantProxy), amount);
             /// @dev requestKycStatus
             (bool success,) = address(compliantProxy).call(
-                abi.encodeWithSignature("requestKycStatus(address,address)", user, logicImplementation)
+                abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, logicImplementation, gasLimit)
             );
             require(success, "delegate call in handler to requestKycStatus() failed");
             vm.stopPrank();
@@ -199,22 +212,24 @@ contract Handler is Test {
         bytes32 requestId = _handleRequestLogs();
 
         /// @dev update relevant ghosts for request
-        _updateRequestGhosts(requestId, user, isLogic);
+        _updateRequestGhosts(requestId, user, isLogic, gasLimit);
 
         /// @dev record logs again
         vm.recordLogs();
 
         /// @dev simulate automation with performUpkeep
-        _performUpkeep(user, logicImplementation, isCompliant, isLogic);
+        _performUpkeep(user, logicImplementation, isCompliant, isLogic, gasLimit);
 
         /// @dev handle logs for performUpkeep
         _handlePerformUpkeepLogs();
     }
 
     /// @dev onlyOwner
-    function withdrawFees(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic) public {
+    function withdrawFees(uint256 addressSeed, bool isCompliant, bool isOnTokenTransfer, bool isLogic, uint64 gasLimit)
+        public
+    {
         if (g_compliantFeesInLink == 0) {
-            sendRequest(addressSeed, isCompliant, isOnTokenTransfer, isLogic);
+            sendRequest(addressSeed, isCompliant, isOnTokenTransfer, isLogic, gasLimit);
         } else {
             /// @dev getCompliantFeesToWithdraw and add it to ghost tracker
             (, bytes memory retData) =
@@ -267,11 +282,18 @@ contract Handler is Test {
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @dev onlyForwarder
-    function _performUpkeep(address requestedAddress, address logicImplementation, bool isCompliant, bool isLogic)
-        internal
-    {
-        bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
-        bytes memory performData = abi.encode(requestId, requestedAddress, logicImplementation, isCompliant);
+    function _performUpkeep(
+        address requestedAddress,
+        address logicImplementation,
+        bool isCompliant,
+        bool isLogic,
+        uint64 gasLimit
+    ) internal {
+        if (gasLimit < compliantRouter.getMinGasLimit()) gasLimit = compliantRouter.getDefaultGasLimit();
+
+        // bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
+        bytes32 requestId = keccak256(abi.encodePacked(requestedAddress, g_requestsMade));
+        bytes memory performData = abi.encode(requestId, requestedAddress, logicImplementation, gasLimit, isCompliant);
 
         vm.prank(forwarder);
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
@@ -302,10 +324,11 @@ contract Handler is Test {
         return (user, amount);
     }
 
-    function _updateRequestGhosts(bytes32 requestId, address user, bool isLogic) internal {
+    function _updateRequestGhosts(bytes32 requestId, address user, bool isLogic, uint64 gasLimit) internal {
         /// @dev set request to pending
         g_pendingRequests[requestId] = true;
         g_requestIdToUser[requestId] = user;
+        g_requestIdToGasLimit[requestId] = gasLimit;
 
         g_linkAddedToRegistry += IAutomationRegistryConsumer(registry).getMinBalance(upkeepId);
 
@@ -315,6 +338,7 @@ contract Handler is Test {
 
         /// @dev increment requests made
         g_requestsMade++;
+        g_requestedUserToRequestNonce[user] = g_requestsMade;
 
         /// @dev update last external fees
         g_lastEverestFee = IEverestConsumer(everest).oraclePayment();
@@ -437,7 +461,7 @@ contract Handler is Test {
         deal(link, user, amount);
 
         vm.prank(user);
-        try compliantRouter.requestKycStatus(user, address(logic)) {
+        try compliantRouter.requestKycStatus(user, address(logic), defaultGasLimit) {
             g_directCallSuccesses++;
         } catch (bytes memory error) {
             _handleOnlyProxyError(error);
@@ -536,4 +560,7 @@ contract Handler is Test {
 
         return amount;
     }
+
+    /// @notice Empty test function to ignore file in coverage report
+    function test_handler() public {}
 }
