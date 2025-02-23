@@ -253,15 +253,22 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         emit CompliantStatusFulfilled(requestId, user, logic, isCompliant);
 
-        bytes memory callData = abi.encodeWithSelector(ICompliantLogic.compliantLogic.selector, user, isCompliant);
+        if (isCompliant) {
+            bytes memory callData = abi.encodeWithSelector(ICompliantLogic.executeLogic.selector, user);
 
-        // Perform the low-level call with the gas limit
-        (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
+            // review - should we skip to fail event here if logic is does not implement expected interface?
+            // Example:
+            // bool success = false;
+            // if (_isCompliantLogic(logic)) (success, bytes memory err) = logic.call{gas: gasLimit}(callData);
 
-        /// @dev if logic implementation reverts, complete tx with event indicating as such
-        if (!success) {
-            // Emit an event to log the failure
-            emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
+            // Perform the low-level call with the gas limit
+            (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
+
+            /// @dev if logic implementation reverts, complete tx with event indicating as such
+            if (!success) {
+                // Emit an event to log the failure
+                emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
+            }
         }
     }
 
@@ -315,6 +322,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         s_pendingRequests[requestId].isPending = true;
         if (gasLimit >= MIN_GAS_LIMIT && gasLimit != DEFAULT_GAS_LIMIT) {
             s_pendingRequests[requestId].gasLimit = gasLimit;
+            // review - should we emit an event here?
+            // emit GasLimitSet(requestId, gasLimit);
         }
     }
 
@@ -341,6 +350,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         registry.addFunds(i_upkeepId, automationFeeInLink);
         // review unused-return
         i_link.approve(address(i_everest), everestFeeInLink);
+
+        // review should we emit event here?
+        // FeesHandled(compliantFeeInLink, everestFeeInLink, automationFeeInLink);
 
         return totalFee;
     }

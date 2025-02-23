@@ -26,7 +26,7 @@ contract LogicHarness is CompliantLogic {
                                 INTERNAL
     //////////////////////////////////////////////////////////////*/
     /// @notice the havoced bool will determine if the call is a success, allowing us to verify both outcomes
-    function _compliantLogic(address user) internal override {
+    function _executeLogic(address user) internal override {
         bool success = getSuccess();
         if (success) _success(user);
         else _revert(user);

@@ -124,10 +124,6 @@ contract Handler is Test {
     /// @dev ghost to track requestId to gasLimit
     mapping(bytes32 requestId => uint64 gasLimit) public g_requestIdToGasLimit;
 
-    /// @dev ghost to track CompliantLogic.NonCompliantUser events
-    /// @notice this is true if NONCompliant!
-    mapping(address emittedUser => bool isNotCompliant) public g_nonCompliantUserEvent;
-
     /// @dev ghost to track the requestId to whether the request is to valid logic implementation
     // do we need this? is this the right kind of ghost? what do we want to track about valid logic implementation use?
     mapping(bytes32 requestId => bool isLogic) public g_requestIsLogic;
@@ -410,7 +406,6 @@ contract Handler is Test {
 
     function _handlePerformUpkeepLogs() internal {
         bytes32 compliantStatusFulfilled = keccak256("CompliantStatusFulfilled(bytes32,address,address,bool)");
-        bytes32 nonCompliantUserEvent = keccak256("NonCompliantUser(address)");
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
@@ -429,16 +424,6 @@ contract Handler is Test {
                 g_compliantFulfilledEventIsCompliant[user] = emittedBool;
 
                 g_compliantFulfilledEventsEmitted++;
-            }
-
-            /// @dev handle CompliantLogic.NonCompliantUser() event
-            if (logs[i].topics[0] == nonCompliantUserEvent) {
-                address nonCompliantUser = address(uint160(uint256(logs[i].topics[1])));
-                require(user == nonCompliantUser, "invalid users emitted by fulfilled and nonCompliant events.");
-
-                g_nonCompliantUserEvent[user] = true;
-            } else {
-                g_nonCompliantUserEvent[user] = false;
             }
         }
     }

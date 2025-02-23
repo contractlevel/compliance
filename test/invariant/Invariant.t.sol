@@ -401,19 +401,6 @@ contract Invariant is StdInvariant, BaseTest {
     //  NOTE: THIS WOULD REQUIRE LOCAL CHAINLINK AUTOMATION SIMULATOR
     //  performUpkeep should only process requests where checkLog indicates that upkeepNeeded is true.
 
-    // CompliantLogic Event Consistency:
-    /// @dev NonCompliantUser should be emitted everytime user is not compliant
-    function invariant_eventConsistency_nonCompliant_emitsForNonCompliant() public {
-        handler.forEachUser(this.checkNonCompliantUserEvent);
-    }
-
-    function checkNonCompliantUserEvent(address user) external view {
-        assertFalse(
-            handler.g_compliantFulfilledEventIsCompliant(user) == handler.g_nonCompliantUserEvent(user),
-            "Invariant violated: NonCompliantUser event should only be emitted when user is non compliant."
-        );
-    }
-
     // Gas Limit:
     /// @dev Less than minimum or default gas limit should not write to storage
     function invariant_gasLimit_noStorageWrite() public {

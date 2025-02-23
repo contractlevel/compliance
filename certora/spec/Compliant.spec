@@ -4,7 +4,7 @@ using MockEverestConsumer as everest;
 using MockForwarder as forwarder;
 using MockAutomationRegistry as registry;
 using ERC677 as link;
-using LogicHarness as logic;
+using LogicHarness as logic; // review should this be renamed?
 using NonLogic as nonLogic;
 
 /*//////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ methods {
     function everest.getNonce() external returns (uint256) envfree;
 
     // Wildcard dispatcher summaries
-    function _.compliantLogic(address,bool) external => DISPATCHER(true);
+    function _.executeLogic(address) external => DISPATCHER(true);
     function _.supportsInterface(bytes4 interfaceId) external => DISPATCHER(true);
 
     // Harness helper functions
@@ -49,6 +49,9 @@ methods {
     function logic.getSuccess() external returns (bool) envfree;
     function requestId(address) external returns (bytes32) envfree;
     function createLog(bytes32,bool,address,address,address) external returns (CompliantRouter.Log);
+    function extractSelector(uint) external returns (bytes4) envfree;
+    function extractAddress(uint,uint) external returns (address) envfree;
+    function getExecuteLogicSelector() external returns (bytes4) envfree;
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -78,10 +81,6 @@ definition CompliantStatusFulfilledEvent() returns bytes32 =
 definition CompliantLogicExecutionFailedEvent() returns bytes32 =
 // keccak256(abi.encodePacked("CompliantLogicExecutionFailed(bytes32,address,address,bool,bytes)"))
     to_bytes32(0xf26409c317494206f6feac40c1676f1481f66716e008e26a4b09511c63fb16bb);
-
-definition NonCompliantUserEvent() returns bytes32 =
-// keccak256(abi.encodePacked("NonCompliantUser(address)"))
-    to_bytes32(0x03b17d62eebc94823993c88b2f49c9bbe3e292260b1dd80e079dd3d43129cbfc);
 
 definition EverestFulfilledEvent() returns bytes32 =
 // keccak256(abi.encodePacked("Fulfilled(bytes32,address,address,uint8,uint40)"))
@@ -136,6 +135,11 @@ ghost mathint g_gasLimit {
     init_state axiom g_gasLimit == 0;
 }
 
+/// @notice track whether a non-compliant call has happened
+ghost bool g_nonCompliantCallHappened {
+    init_state axiom g_nonCompliantCallHappened == false;
+}
+
 /*//////////////////////////////////////////////////////////////
                              HOOKS
 //////////////////////////////////////////////////////////////*/
@@ -169,10 +173,18 @@ hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 
         g_compliantLogicExecutionFailedEvents = g_compliantLogicExecutionFailedEvents + 1;
 }
 
-/// @notice increment g_nonCompliantUserEvents when NonCompliantUser() emitted
-hook LOG2(uint offset, uint length, bytes32 t0, bytes32 t1) {
-    if (t0 == NonCompliantUserEvent())
-        g_nonCompliantUserEvents = g_nonCompliantUserEvents + 1;
+/// @dev if a call to a logic contract is made with the executeLogic method and the user is non-compliant,
+/// set g_nonCompliantCallHappened to true
+hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, uint retOffset, uint retLength) uint rc {
+    /// @dev check if the call is to the correct function selector
+    if (argsLength >= 4 && extractSelector(argsOffset) == getExecuteLogicSelector()) {
+        /// @dev extract the user address being passed to restricted logic from the call data 
+        address user = extractAddress(argsOffset, argsLength);
+        /// @dev set ghost to true if passed user is non-compliant
+        if (!getIsCompliant(user)) {
+            g_nonCompliantCallHappened = true;
+        }
+    }
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -187,6 +199,18 @@ invariant pendingRequest_gasLimit_valid(bytes32 requestId)
     getPendingRequest(requestId).gasLimit == 0 || 
     (getPendingRequest(requestId).gasLimit >= getMinGasLimit() && 
      getPendingRequest(requestId).gasLimit <= getMaxGasLimit());
+
+/// @notice logic address must implement expected interface
+invariant pendingRequest_logic_valid_pending(bytes32 requestId)
+    getPendingRequest(requestId).isPending => getIsCompliantLogic(getPendingRequest(requestId).logic);
+
+/// @notice logic address must implement expected interface
+invariant logic_address_compliant(bytes32 requestId)
+    getPendingRequest(requestId).logic != 0 => getIsCompliantLogic(getPendingRequest(requestId).logic);
+
+/// @notice non-compliant calls should never happen
+invariant no_nonCompliant_calls()
+    !g_nonCompliantCallHappened;
 
 /*//////////////////////////////////////////////////////////////
                              RULES
@@ -305,30 +329,47 @@ rule withdrawFees_revertsWhen_notOwner() {
     assert lastReverted;
 }
 
-/// @notice LINK balance of the contract should decrease by the exact amount transferred to the owner in withdrawFees
+/// @notice Verifies that withdrawFees correctly updates LINK balances and clears fees
 rule withdrawFees_balanceIntegrity() {
+    /// @dev setup environment
     env e;
     require e.msg.sender != currentContract;
     require link == getLink();
-    uint256 feesToWithdraw = getCompliantFeesToWithdraw();
 
-    uint256 balance_before = link.balanceOf(currentContract);
+    /// @dev check initial balances
+    uint256 feesBefore = getCompliantFeesToWithdraw();
+    uint256 balanceBefore = link.balanceOf(currentContract);
+    uint256 ownerBalanceBefore = link.balanceOf(e.msg.sender);
+
+    /// @dev setup checked balances
+    require feesBefore > 0;
+    require balanceBefore >= feesBefore;
+    require feesBefore + ownerBalanceBefore <= max_uint;
+
+    /// @dev execute method
     withdrawFees(e);
-    uint256 balance_after = link.balanceOf(currentContract);
 
-    assert balance_after == balance_before - feesToWithdraw;
+    /// @dev check final balances
+    uint256 feesAfter = getCompliantFeesToWithdraw();
+    uint256 balanceAfter = link.balanceOf(currentContract);
+    uint256 ownerBalanceAfter = link.balanceOf(e.msg.sender);
+
+    /// @dev assert expected state
+    assert feesAfter == 0, "All fees should be withdrawn";
+    assert balanceAfter == balanceBefore - feesBefore, "Contract balance should decrease by fees";
+    assert ownerBalanceAfter == ownerBalanceBefore + feesBefore, "Owner balance should increase by fees";
 }
 
 /// @notice CompliantStatusRequested event is emitted for every request
-rule requests_emit_events(method f) filtered {f -> canRequestStatus(f)} {
+rule requests_emit_correct_event_count(method f) 
+    filtered { f -> canRequestStatus(f) } {
     env e;
     calldataarg args;
-
-    require g_compliantStatusRequestedEvents == 0;
-
+    mathint eventsBefore = g_compliantStatusRequestedEvents;
     f(e, args);
-
-    assert g_compliantStatusRequestedEvents == 1;
+    mathint eventsAfter = g_compliantStatusRequestedEvents;
+    assert eventsAfter == eventsBefore + 1,
+        "Exactly one CompliantStatusRequested event should be emitted for a request";
 }
 
 /// @notice CompliantStatusFulfilled event is emitted for every fulfilled request
@@ -388,12 +429,11 @@ rule requests_fundRegistry(method f) filtered {f -> canRequestStatus(f)} {
 /// @notice sanity check to make sure the logicRevert implementation does revert as expected
 rule logicReverts_check() {
     env e;
-    require e.msg.sender == currentContract;
     address user;
-    bool isCompliant = true;
+    require e.msg.sender == currentContract;
     require logic.getSuccess() == false;
 
-    logic.compliantLogic@withrevert(e, user, isCompliant);
+    logic.executeLogic@withrevert(e, user);
     assert lastReverted;
 }
 
@@ -458,24 +498,6 @@ rule compliantLogic_executes_for_compliantUser() {
 
     assert valueAfter == valueBefore + 1;
     assert ghostAfter == ghostBefore + 1;
-}
-
-/// @notice CompliantLogic must emit NonCompliantUser() event for non compliant users
-rule compliantLogic_emitsEvent_for_nonCompliantUser() {
-    env e;
-    address user;
-    bytes32 requestId;
-    uint64 gasLimit;
-    bool isCompliant = false;
-    require gasLimit <= getMaxGasLimit();
-    bytes performData = performData(requestId, user, logic, gasLimit, isCompliant);
-
-    require logic.getSuccess() == true;
-    require g_nonCompliantUserEvents == 0;
-
-    performUpkeep(e, performData);
-
-    assert g_nonCompliantUserEvents == 1;
 }
 
 /// @notice CompliantLogic restricted logic must not be executed on behalf of non compliant users
@@ -775,4 +797,89 @@ rule checkLog_revertsWhen_invalidRevealer() {
 
     checkLog@withrevert(e, log, data);
     assert lastReverted;
+}
+
+/// @notice Verifies gas limit behavior for request methods
+// review - not really sure this is better than splitting into separate rules
+rule gasLimit_behavior(method f, uint64 gasLimit) 
+    filtered { f -> canRequestStatus(f) } {
+    env e;
+    address user;
+    bytes32 requestId = requestId(user);
+    CompliantRouter.PendingRequest requestBefore = getPendingRequest(requestId);
+
+    /// @dev requests will always be unique so this will always be 0
+    require requestBefore.gasLimit == 0;
+
+    /// @dev set up non-revert conditions
+    require e.msg.value == 0;
+    require user != 0;
+    require currentContract == getProxy();
+    require getCompliantFeesToWithdraw() <= max_uint - getCompliantFee();
+    require everest.getNonce() < max_uint;
+
+    /// @dev determine request method
+    if (f.selector == sig:onTokenTransfer(address,uint256,bytes).selector) {
+        bytes data = onTokenTransferData(user, logic, gasLimit);
+
+        /// @dev set up non-revert conditions
+        require link.balanceOf(currentContract) >= getFee();
+        require e.msg.sender == getLink();
+      
+        /// @dev execute request
+        onTokenTransfer@withrevert(e, user, getFee(), data);
+    } else {
+        /// @dev set up non-revert conditions
+        require link.balanceOf(currentContract) <= max_uint - getFee();
+        require link.balanceOf(e.msg.sender) >= getFee();
+        require link.allowance(e.msg.sender, currentContract) >= getFee();
+        require e.msg.sender != registry;
+        require e.msg.sender != everest;
+        require e.msg.sender != 0;
+  
+        /// @dev execute request
+        requestKycStatus@withrevert(e, user, logic, gasLimit);
+    }
+
+    /// @dev check state after request
+    bool reverted = lastReverted;
+    CompliantRouter.PendingRequest requestAfter = getPendingRequest(requestId);
+
+    // review - should these be implication statements?
+    if (gasLimit > getMaxGasLimit()) {
+        assert reverted, "Should revert if gas limit exceeds max";
+    } else if (gasLimit < getMinGasLimit() || gasLimit == getDefaultGasLimit()) {
+        assert requestAfter.gasLimit == 0, "Should not store default or below-min gas limit";
+        assert !reverted, "Should not revert with default or below-min gas limit";
+    } else {
+        assert requestAfter.gasLimit == gasLimit, "Should store valid non-default gas limit";
+        assert !reverted, "Should not revert with valid gas limit";
+    }
+}
+
+/// @notice requestKycStatus should revert if user address is zero
+rule requestKycStatus_revertsWhen_zeroUser() {
+    env e;
+    uint64 gasLimit;
+    requestKycStatus@withrevert(e, 0, logic, gasLimit);
+    assert lastReverted, "Should revert with zero user address";
+}
+
+/// @notice onTokenTransfer should revert if user address is zero
+rule onTokenTransfer_revertsWhen_zeroUser() {
+    env e;
+    uint64 gasLimit;
+    bytes data = onTokenTransferData(0, logic, gasLimit);
+    onTokenTransfer@withrevert(e, getLink(), getFee(), data);
+    assert lastReverted, "Should revert with zero user address";
+}
+
+/// @notice withdrawFees withdraws all fees
+rule withdrawFees_clears_fees() {
+    env e;
+    uint256 feesBefore = getCompliantFeesToWithdraw();
+    require feesBefore > 0;
+    withdrawFees(e);
+    assert getCompliantFeesToWithdraw() == 0,
+        "All fees should be withdrawn";
 }

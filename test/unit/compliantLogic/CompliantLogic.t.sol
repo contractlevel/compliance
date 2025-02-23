@@ -7,51 +7,25 @@ import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {ICompliantLogic} from "../../../src/interfaces/ICompliantLogic.sol";
 
 contract CompliantLogicTest is BaseTest {
-    function test_compliantLogic_compliantLogic_nonCompliant() public {
-        bool isCompliant = false;
+    function test_compliantLogic_executeLogic() public {
+        uint256 incrementBefore = logic.getIncrementedValue();
+        uint256 userIncrementBefore = logic.getUserToIncrement(user);
 
-        vm.recordLogs();
-
-        vm.prank(logic.getCompliantRouter());
-        logic.compliantLogic(user, isCompliant);
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 eventSignature = keccak256("NonCompliantUser(address)");
-        address emittedUser;
-
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == eventSignature) {
-                emittedUser = address(uint160(uint256(logs[i].topics[1])));
-            }
-        }
-
-        assertEq(user, emittedUser);
-    }
-
-    function test_compliantLogic_compliantLogic_isCompliant() public {
-        bool isCompliant = true;
-
-        vm.recordLogs();
+        assertEq(incrementBefore, 0);
+        assertEq(userIncrementBefore, 0);
 
         vm.prank(logic.getCompliantRouter());
-        logic.compliantLogic(user, isCompliant);
+        logic.executeLogic(user);
 
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 eventSignature = keccak256("NonCompliantUser(address)");
-        uint256 eventEmissions;
+        uint256 incrementAfter = logic.getIncrementedValue();
+        uint256 userIncrementAfter = logic.getUserToIncrement(user);
 
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == eventSignature) {
-                eventEmissions++;
-            }
-        }
-
-        assertEq(eventEmissions, 0);
+        assertEq(incrementAfter, 1);
+        assertEq(userIncrementAfter, 1);
     }
 
-    function test_compliantLogic_compliantLogic_revertsWhen_notCompliantRouter() public {
-        bool isCompliant;
+    function test_compliantLogic_executeLogic_revertsWhen_notCompliantRouter() public {
         vm.expectRevert(abi.encodeWithSignature("CompliantLogic__OnlyCompliantRouter()"));
-        logic.compliantLogic(user, isCompliant);
+        logic.executeLogic(user);
     }
 }
