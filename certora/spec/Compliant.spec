@@ -176,9 +176,11 @@ hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 
 /// @dev if a call to a logic contract is made with the executeLogic method and the user is non-compliant,
 /// set g_nonCompliantCallHappened to true
 hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, uint retOffset, uint retLength) uint rc {
-    // Check if the call is to executeLogic(address)
+    /// @dev check if the call is to the correct function selector
     if (argsLength >= 4 && extractSelector(argsOffset) == getExecuteLogicSelector()) {
+        /// @dev extract the user address being passed to restricted logic from the call data 
         address user = extractAddress(argsOffset, argsLength);
+        /// @dev set ghost to true if passed user is non-compliant
         if (!getIsCompliant(user)) {
             g_nonCompliantCallHappened = true;
         }
@@ -206,7 +208,7 @@ invariant pendingRequest_logic_valid_pending(bytes32 requestId)
 invariant logic_address_compliant(bytes32 requestId)
     getPendingRequest(requestId).logic != 0 => getIsCompliantLogic(getPendingRequest(requestId).logic);
 
-/// @notice non-compliant calls should not happen
+/// @notice non-compliant calls should never happen
 invariant no_nonCompliant_calls()
     !g_nonCompliantCallHappened;
 
