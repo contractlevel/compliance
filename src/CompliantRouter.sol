@@ -256,6 +256,11 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         if (isCompliant) {
             bytes memory callData = abi.encodeWithSelector(ICompliantLogic.executeLogic.selector, user);
 
+            // review - should we skip to fail event here if logic is does not implement expected interface?
+            // Example:
+            // bool success = false;
+            // if (_isCompliantLogic(logic)) (success, bytes memory err) = logic.call{gas: gasLimit}(callData);
+
             // Perform the low-level call with the gas limit
             (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
 
