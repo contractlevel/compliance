@@ -37,6 +37,31 @@ contract Harness is CompliantRouter {
         return keccak256(abi.encodePacked(user, nonce));
     }
 
+    /// @dev extract function selector from logic calldata
+    function extractSelector(uint argsOffset) external pure returns (bytes4) {
+        bytes4 selector;
+        assembly {
+            selector := mload(argsOffset)
+        }
+        return selector;
+    }
+    
+    /// @dev extract user address from logic calldata
+    function extractAddress(uint argsOffset, uint argsLength) external pure returns (address) {
+        require(argsLength >= 36, "Args length too short for selector and address");
+        address user;
+        assembly {
+            let dataPtr := add(argsOffset, 4) // Skip the 4-byte selector
+            user := mload(dataPtr)            // Load 32 bytes containing the address
+        }
+        return user;
+    }
+
+    /// @dev return selector for executeLogic
+    function getExecuteLogicSelector() public pure returns (bytes4) {
+        return ICompliantLogic.executeLogic.selector;
+    }
+
     /// @dev create log for checkLog
     function createLog(
         bytes32 requestId,

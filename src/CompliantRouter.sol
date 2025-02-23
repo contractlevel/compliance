@@ -322,6 +322,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         s_pendingRequests[requestId].isPending = true;
         if (gasLimit >= MIN_GAS_LIMIT && gasLimit != DEFAULT_GAS_LIMIT) {
             s_pendingRequests[requestId].gasLimit = gasLimit;
+            // review - should we emit an event here?
+            // emit GasLimitSet(requestId, gasLimit);
         }
     }
 
@@ -348,6 +350,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         registry.addFunds(i_upkeepId, automationFeeInLink);
         // review unused-return
         i_link.approve(address(i_everest), everestFeeInLink);
+
+        // review should we emit event here?
+        // FeesHandled(compliantFeeInLink, everestFeeInLink, automationFeeInLink);
 
         return totalFee;
     }
