@@ -98,6 +98,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     event CompliantLogicExecutionFailed(
         bytes32 indexed requestId, address indexed user, address indexed logic, bool isCompliant, bytes err
     );
+    /// @dev emitted when fees are withdrawn by admin
+    event FeesWithdrawn(uint256 indexed amount);
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -256,11 +258,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         if (isCompliant) {
             bytes memory callData = abi.encodeWithSelector(ICompliantLogic.executeLogic.selector, user);
 
-            // review - should we skip to fail event here if logic does not implement expected interface?
-            // Example:
-            // bool success = false;
-            // if (_isCompliantLogic(logic)) (success, bytes memory err) = logic.call{gas: gasLimit}(callData);
-
             // Perform the low-level call with the gas limit
             (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
 
@@ -277,7 +274,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         uint256 compliantFeesInLink = s_compliantFeesInLink;
         s_compliantFeesInLink = 0;
 
-        // review - should event be emitted here?
+        // review - verify this event
+        emit FeesWithdrawn(compliantFeesInLink);
 
         //slither-disable-next-line unchecked-transfer
         i_link.transfer(owner(), compliantFeesInLink);
