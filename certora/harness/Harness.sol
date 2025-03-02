@@ -100,6 +100,11 @@ contract Harness is CompliantRouter {
         return log;
     }
 
+    /// @dev convert bytes32 to uint256
+    function bytes32ToUint256(bytes32 input) external pure returns (uint256) {
+        return uint256(input);
+    }
+
     /// @dev wrapper for _getLatestPrice() internal
     function getLatestPrice() external returns (uint256) {
         return _getLatestPrice();

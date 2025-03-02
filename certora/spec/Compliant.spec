@@ -52,6 +52,7 @@ methods {
     function extractSelector(uint) external returns (bytes4) envfree;
     function extractAddress(uint,uint) external returns (address) envfree;
     function getExecuteLogicSelector() external returns (bytes4) envfree;
+    function bytes32ToUint256(bytes32) external returns (uint256) envfree;
 }
 
 /*//////////////////////////////////////////////////////////////
@@ -85,6 +86,10 @@ definition CompliantLogicExecutionFailedEvent() returns bytes32 =
 definition EverestFulfilledEvent() returns bytes32 =
 // keccak256(abi.encodePacked("Fulfilled(bytes32,address,address,uint8,uint40)"))
     to_bytes32(0x6d3b3a10e0131f9c51ce77634a8b45197a7e81e3577f98cbe02df2752fe20024);
+
+definition FeesWithdrawnEvent() returns bytes32 =
+// keccak256(abi.encodePacked("FeesWithdrawn(uint256)"))
+    to_bytes32(0x9800e6f57aeb4360eaa72295a820a4293e1e66fbfcabcd8874ae141304a76deb);
 
 /// @notice 1e18
 definition WAD_PRECISION() returns uint256 = 1000000000000000000;
@@ -130,6 +135,16 @@ ghost mathint g_nonCompliantUserEvents {
     init_state axiom g_nonCompliantUserEvents == 0;
 }
 
+/// @notice track FeesWithdrawn() event emissions
+ghost mathint g_feesWithdrawnEvents {
+    init_state axiom g_feesWithdrawnEvents == 0;
+}
+
+/// @notice track the amount withdrawn emitted in FeesWithdrawn() events
+ghost mathint g_feesWithdrawnEventAmount {
+    init_state axiom g_feesWithdrawnEventAmount == 0;
+}
+
 /// @notice track the gasLimit stored in a pending request
 ghost mathint g_gasLimit {
     init_state axiom g_gasLimit == 0;
@@ -171,6 +186,13 @@ hook LOG4(uint offset, uint length, bytes32 t0, bytes32 t1, bytes32 t2, bytes32 
 
     if (t0 == CompliantLogicExecutionFailedEvent())
         g_compliantLogicExecutionFailedEvents = g_compliantLogicExecutionFailedEvents + 1;
+}
+
+/// @notice increment g_feesWithdrawnEvents when FeesWithdrawn() emitted
+hook LOG2(uint offset, uint length, bytes32 t0, bytes32 t1) {
+    if (t0 == FeesWithdrawnEvent())
+        g_feesWithdrawnEvents = g_feesWithdrawnEvents + 1;
+        g_feesWithdrawnEventAmount = bytes32ToUint256(t1);
 }
 
 /// @dev if a call to a logic contract is made with the executeLogic method and the user is non-compliant,
@@ -882,4 +904,18 @@ rule withdrawFees_clears_fees() {
     withdrawFees(e);
     assert getCompliantFeesToWithdraw() == 0,
         "All fees should be withdrawn";
+}
+
+/// @notice withdrawFees should emit FeesWithdrawn event
+rule withdrawFees_emitsEvent() {
+    env e;
+
+    uint256 feesBefore = getCompliantFeesToWithdraw();
+    require g_feesWithdrawnEventAmount == 0;
+    require g_feesWithdrawnEvents == 0;
+
+    withdrawFees(e);
+
+    assert g_feesWithdrawnEvents == 1;
+    assert g_feesWithdrawnEventAmount == feesBefore;
 }
