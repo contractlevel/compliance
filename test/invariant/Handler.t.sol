@@ -87,6 +87,13 @@ contract Handler is Test {
     /// @dev ghost to increment amount of CompliantStatusFulfilled(bytes32,address,address,bool) events emitted
     uint256 public g_compliantFulfilledEventsEmitted;
 
+    /// @dev ghost to increment amount of FeesWithdrawn(uint256) events emitted
+    uint256 public g_feesWithdrawnEventsEmitted;
+    /// @dev ghost to track total fees withdrawn emitted by FeesWithdrawn(uint256) events
+    uint256 public g_totalFeesWithdrawnEmittedByEvent;
+    /// @dev ghost to track amount of withdrawFees() calls
+    uint256 public g_withdrawFeesCalls;
+
     /// @dev ghost to increment every time Everest.Fulfilled() event is emitted
     uint256 public g_everestFulfilledEventsEmitted;
 
@@ -232,12 +239,18 @@ contract Handler is Test {
                 address(compliantProxy).call(abi.encodeWithSignature("getCompliantFeesToWithdraw()"));
             uint256 fees = abi.decode(retData, (uint256));
 
+            /// @dev record logs
+            vm.recordLogs();
+
             vm.prank(compliantRouter.owner());
             (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("withdrawFees()"));
             require(success, "delegate call in handler to withdrawFees() failed");
 
             g_totalFeesWithdrawn += fees;
             g_compliantFeesInLink = 0;
+            g_withdrawFeesCalls += 1;
+
+            _handleWithdrawFeeLogs();
         }
     }
 
@@ -424,6 +437,23 @@ contract Handler is Test {
                 g_compliantFulfilledEventIsCompliant[user] = emittedBool;
 
                 g_compliantFulfilledEventsEmitted++;
+            }
+        }
+    }
+
+    function _handleWithdrawFeeLogs() internal {
+        bytes32 feesWithdrawn = keccak256("FeesWithdrawn(uint256)");
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        for (uint256 i = 0; i < logs.length; i++) {
+            /// @dev handle FeesWithdrawn() event params and ghost
+            if (logs[i].topics[0] == feesWithdrawn) {
+                uint256 amountWithdrawn = uint256(logs[i].topics[1]);
+
+                g_totalFeesWithdrawnEmittedByEvent += amountWithdrawn;
+
+                g_feesWithdrawnEventsEmitted++;
             }
         }
     }

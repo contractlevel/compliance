@@ -329,6 +329,24 @@ contract Invariant is StdInvariant, BaseTest {
         }
     }
 
+    /// @dev withdrawFees should emit a FeesWithdrawn event
+    function invariant_eventConsistency_withdrawFees() public view {
+        assertEq(
+            handler.g_feesWithdrawnEventsEmitted(),
+            handler.g_withdrawFeesCalls(),
+            "Invariant violated: withdrawFees should emit a FeesWithdrawn event."
+        );
+    }
+
+    /// @dev FeesWithdrawn event should emit the correct amount
+    function invariant_eventConsistency_withdrawFees_amount() public {
+        assertEq(
+            handler.g_totalFeesWithdrawn(),
+            handler.g_totalFeesWithdrawnEmittedByEvent(),
+            "Invariant violated: FeesWithdrawn event should emit the correct amount."
+        );
+    }
+
     // Fee Transfer Validity:
     /// @dev LINK balance of the contract should decrease by the exact amount transferred to the owner in withdrawFees
     function invariant_linkBalanceIntegrity() public view {
@@ -389,8 +407,8 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     // Upkeep Execution:
-    /// @dev Automation-related requests should add funds to the Chainlink registry via registry.addFunds
-    function invariant_requests_withAutomation_addFundsToRegistry() public view {
+    /// @dev Requests should add funds to the Chainlink registry via registry.addFunds
+    function invariant_requests_addFundsToRegistry() public view {
         assertEq(
             LinkTokenInterface(link).balanceOf(registry),
             handler.g_linkAddedToRegistry(),
