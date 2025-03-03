@@ -51,8 +51,8 @@ contract Harness is CompliantRouter {
         require(argsLength >= 36, "Args length too short for selector and address");
         address user;
         assembly {
-            let dataPtr := add(argsOffset, 4) // Skip the 4-byte selector
-            user := mload(dataPtr)            // Load 32 bytes containing the address
+            let dataPtr := add(argsOffset, 4) // skip the 4-byte selector
+            user := mload(dataPtr)            // load 32 bytes containing the address
         }
         return user;
     }

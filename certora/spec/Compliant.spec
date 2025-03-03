@@ -821,6 +821,28 @@ rule checkLog_revertsWhen_invalidRevealer() {
     assert lastReverted;
 }
 
+/// @notice checkLog should revert if the request is not pending
+rule checkLog_revertsWhen_requestNotPending() {
+    env e;
+    address user;
+    bytes32 requestId = requestId(user);
+    bool isCompliant;
+    bytes32 event = EverestFulfilledEvent();
+    bytes data;
+
+    CompliantRouter.PendingRequest request = getPendingRequest(requestId);
+    require !request.isPending;
+
+    require getIsCompliantLogic(request.logic);
+    require e.tx.origin == 0 || e.tx.origin == 0x1111111111111111111111111111111111111111;
+    require currentContract == getProxy();
+
+    CompliantRouter.Log log = createLog(e, requestId, isCompliant, currentContract, user, everest, event);
+
+    checkLog@withrevert(e, log, data);
+    assert lastReverted;
+}
+
 /// @notice Verifies gas limit behavior for request methods
 // review - not really sure this is better than splitting into separate rules
 rule gasLimit_behavior(method f, uint64 gasLimit) 
