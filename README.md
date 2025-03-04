@@ -51,7 +51,7 @@ The fee amount to pass for both options can be read from `CompliantRouter.getFee
 
 Once a request for the KYC status of an address has been fulfilled by the Everest Chainlink node, Chainlink Log Trigger Automation will be used to route the response to the user/client's `CompliantLogic` implementation. 
 
-`CompliantLogic` is an abstract contract. Users must inherit and override the internal `_compliantLogic()` function. If the `CompliantLogic` contract address passed to the `CompliantRouter` during requests does not implement the expected interface, the request will revert.
+`CompliantLogic` is an abstract contract. Users must inherit and override the internal `_executeLogic_()` function. If the `CompliantLogic` contract address passed to the `CompliantRouter` during requests does not implement the expected interface, the request will revert.
 
 ## Fees
 
@@ -63,7 +63,7 @@ A fee in LINK is taken for each request, covering the following:
 
 ### Compliant Fee
 
-This fee is intended as payment for the Owner of the `CompliantRouter` contract. Chainlink Price Feed is used to get the USD value of LINK and calculate how much the `CompliantRouter` contract should receive. Currently it is set to 50c per request, but a lower value or even a configurable value would be more attractive. These accumulated `CompliantRouter` fees could then be periodically distributed amongst holders of a potential `Contract Level (LEVEL)` token using Chainlink Automation.
+This fee is intended as payment for the Owner of the `CompliantRouter` contract. Chainlink Price Feed is used to get the USD value of LINK and calculate how much the `CompliantRouter` contract should receive. Currently it is set to 50c per request, but a lower value or even a configurable value would be more attractive.
 
 ### Everest Fee
 
