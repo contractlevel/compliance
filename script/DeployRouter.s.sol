@@ -15,6 +15,8 @@ import {
 import {IAutomationRegistryMaster} from
     "@chainlink/contracts/src/v0.8/automation/interfaces/v2_2/IAutomationRegistryMaster.sol";
 
+/// @notice Crosschain Routers - Parent/Child Routers - will require different deploy scripts
+/// as only the Parent will need to be registered with Automation and interact with Everest
 contract DeployRouter is Script {
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
