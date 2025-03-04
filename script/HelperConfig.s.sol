@@ -13,6 +13,7 @@ contract HelperConfig is Script {
     /*//////////////////////////////////////////////////////////////
                                VARIABLES
     //////////////////////////////////////////////////////////////*/
+    /// @notice these constants are for testing purposes - for MockV3Aggregator
     uint8 constant DECIMALS = 8;
     int256 constant INITIAL_ANSWER = 15 * 1e8; // $15/LINK
 
