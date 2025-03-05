@@ -74,6 +74,7 @@ contract MockEverestConsumer {
 
         // bytes32 requestId = bytes32(uint256(uint160(_revealee)));
         s_nonce++; // Increment the nonce to ensure uniqueness
+        // @review change to keccak256(abi.encodePacked(this, s_nonce)); and copy ChainlinkClient nonce logic
         bytes32 requestId = keccak256(abi.encodePacked(_revealee, s_nonce));
 
         s_requests[requestId] = s_requestsByRevealee[_revealee];
