@@ -258,12 +258,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         if (isCompliant) {
             bytes memory callData = abi.encodeWithSelector(ICompliantLogic.executeLogic.selector, user);
 
-            // Perform the low-level call with the gas limit
             (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
 
             /// @dev if logic implementation reverts, complete tx with event indicating as such
             if (!success) {
-                // Emit an event to log the failure
                 emit CompliantLogicExecutionFailed(requestId, user, logic, isCompliant, err);
             }
         }
