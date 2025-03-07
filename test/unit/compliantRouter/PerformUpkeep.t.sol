@@ -16,7 +16,7 @@ contract PerformUpkeepTest is BaseTest {
         assertEq(mapIncrementBefore, 0);
 
         /// @dev create performData
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
         bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
 
         /// @dev call performUpkeep
@@ -73,7 +73,7 @@ contract PerformUpkeepTest is BaseTest {
         assertEq(mapIncrementBefore, 0);
 
         /// @dev create performData
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
         bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, false); // false for not compliant
 
         /// @dev call performUpkeep
@@ -135,7 +135,7 @@ contract PerformUpkeepTest is BaseTest {
         _setUserPendingRequest(address(logicRevert), defaultGasLimit);
 
         /// @dev create performData
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
         bytes memory performData = abi.encode(requestId, user, address(logicRevert), defaultGasLimit, true);
 
         /// @dev call performUpkeep
@@ -185,7 +185,7 @@ contract PerformUpkeepTest is BaseTest {
         _setUserPendingRequest(address(logic), gasLimit);
 
         /// @dev create performData
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
         bytes memory performData = abi.encode(requestId, user, address(logic), gasLimit, true);
 
         /// @dev Measure gas before function call

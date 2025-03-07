@@ -128,6 +128,8 @@ contract BaseTest is Test {
 
     /// @dev set the user to pending request
     function _setUserPendingRequest(address logicContract, uint64 gasLimit) internal {
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
+
         uint256 amount = compliantRouter.getFee();
         bytes memory data = abi.encode(user, logicContract, gasLimit);
         vm.prank(user);
@@ -136,9 +138,6 @@ contract BaseTest is Test {
         requestNonce++;
 
         // will probably need a function like Everest's getLatestRequestId()
-        // bytes32 requestId;
-        // bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes32 requestId = keccak256(abi.encodePacked(user, requestNonce));
 
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));

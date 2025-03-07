@@ -47,7 +47,7 @@ contract CheckLogTest is BaseTest {
         (bytes32 encodedRequestId, address encodedUser, address encodedLogic, uint64 gasLimit, bool isCompliant) =
             abi.decode(performData, (bytes32, address, address, uint64, bool));
 
-        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, requestNonce));
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(everest, everest.getNonce() - 1));
         assertEq(expectedRequestId, encodedRequestId);
         assertEq(user, encodedUser);
         assertEq(address(logic), encodedLogic);
@@ -74,7 +74,7 @@ contract CheckLogTest is BaseTest {
         (bytes32 encodedRequestId, address encodedUser, address encodedLogic, uint64 gasLimit, bool isCompliant) =
             abi.decode(performData, (bytes32, address, address, uint64, bool));
 
-        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, requestNonce));
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(everest, everest.getNonce() - 1));
         assertEq(expectedRequestId, encodedRequestId);
         assertEq(user, encodedUser);
         assertEq(address(logic), encodedLogic);
@@ -179,12 +179,11 @@ contract CheckLogTest is BaseTest {
     /*//////////////////////////////////////////////////////////////
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
-    /// @notice the bytes32 requestId is for the address(user) -
     /// this function expects the revealee to be address(user) and only takes revealee param to check invalid user revert
     function _createLog(bool isCompliant, address revealer, address revealee) internal view returns (Log memory) {
         bytes32[] memory topics = new bytes32[](3);
         bytes32 eventSignature = keccak256("Fulfilled(bytes32,address,address,uint8,uint40)");
-        bytes32 requestId = keccak256(abi.encodePacked(revealee, requestNonce));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce() - 1));
         bytes32 addressToBytes32 = bytes32(uint256(uint160(revealer)));
         topics[0] = eventSignature;
         topics[1] = requestId;
@@ -212,7 +211,7 @@ contract CheckLogTest is BaseTest {
     }
 
     function _setPendingRequestToFalse() internal {
-        bytes32 requestId = bytes32(uint256(uint160(user)));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
         bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
 
         vm.prank(forwarder);

@@ -50,9 +50,7 @@ contract RequestKycStatusTest is BaseTest {
         }
 
         uint256 linkBalanceAfter = LinkTokenInterface(link).balanceOf(user);
-        // bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
-        uint256 nonce = 1;
-        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, nonce));
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(everest, everest.getNonce() - 1));
 
         assertEq(linkBalanceAfter + expectedFee, linkBalanceBefore);
         assertEq(emittedRequestId, expectedRequestId);

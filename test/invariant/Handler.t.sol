@@ -300,8 +300,7 @@ contract Handler is Test {
     ) internal {
         if (gasLimit < compliantRouter.getMinGasLimit()) gasLimit = compliantRouter.getDefaultGasLimit();
 
-        // bytes32 requestId = bytes32(uint256(uint160(requestedAddress)));
-        bytes32 requestId = keccak256(abi.encodePacked(requestedAddress, g_requestsMade));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, g_requestsMade));
         bytes memory performData = abi.encode(requestId, requestedAddress, logicImplementation, gasLimit, isCompliant);
 
         vm.prank(forwarder);

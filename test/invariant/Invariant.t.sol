@@ -242,8 +242,7 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     function checkForwarderCanCallPerformUpkeep(address user) external {
-        // bytes32 requestId = bytes32(uint256(uint160(user)));
-        bytes32 requestId = keccak256(abi.encodePacked(user, handler.g_requestsMade()));
+        bytes32 requestId = keccak256(abi.encodePacked(everest, handler.g_requestsMade()));
 
         bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
 
@@ -273,9 +272,8 @@ contract Invariant is StdInvariant, BaseTest {
     }
 
     function checkCompliantStatusRequestedEvent(address user) external view {
-        // bytes32 expectedRequestId = bytes32(uint256(uint160(user)));
         uint256 nonce = handler.g_requestedUserToRequestNonce(user);
-        bytes32 expectedRequestId = keccak256(abi.encodePacked(user, nonce));
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(everest, nonce));
 
         if (handler.g_requestedUsers(user)) {
             assertEq(

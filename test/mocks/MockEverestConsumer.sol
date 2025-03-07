@@ -44,7 +44,7 @@ contract MockEverestConsumer {
     mapping(bytes32 => IEverestConsumer.Request) internal s_requests;
     mapping(address revealee => IEverestConsumer.Request) internal s_requestsByRevealee;
 
-    uint256 internal s_nonce;
+    uint256 internal s_nonce = 1;
 
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
@@ -72,10 +72,10 @@ contract MockEverestConsumer {
             revert EverestConsumer__RevealeeShouldNotBeZeroAddress();
         }
 
-        // bytes32 requestId = bytes32(uint256(uint160(_revealee)));
-        s_nonce++; // Increment the nonce to ensure uniqueness
-        // @review change to keccak256(abi.encodePacked(this, s_nonce)); and copy ChainlinkClient nonce logic
-        bytes32 requestId = keccak256(abi.encodePacked(_revealee, s_nonce));
+        uint256 nonce = s_nonce;
+        s_nonce = nonce + 1;
+
+        bytes32 requestId = keccak256(abi.encodePacked(this, nonce));
 
         s_requests[requestId] = s_requestsByRevealee[_revealee];
         s_latestSentRequestId = requestId;
