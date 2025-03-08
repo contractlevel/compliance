@@ -33,8 +33,8 @@ contract Harness is CompliantRouter {
 
     /// @dev predict requestId
     function requestId(address user) external returns (bytes32) {
-        uint256 nonce = MockEverestConsumer(address(i_everest)).getNonce() + 1;
-        return keccak256(abi.encodePacked(user, nonce));
+        uint256 nonce = MockEverestConsumer(address(i_everest)).getNonce();
+        return keccak256(abi.encodePacked(i_everest, nonce));
     }
 
     /// @dev extract function selector from logic calldata
