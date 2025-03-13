@@ -241,8 +241,8 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     }
 
     /// @notice called by Chainlink Automation forwarder when the request is fulfilled
-    /// @dev this function should contain the logic restricted for compliant only users
-    /// @param performData encoded bytes contains bytes32 requestId, address user, address logic and bool isCompliant
+    /// @param performData encoded bytes contains:
+    /// bytes32 requestId, address user, address logic, uint64 gasLimit and bool isCompliant
     function performUpkeep(bytes calldata performData) external onlyProxy {
         if (msg.sender != address(i_forwarder)) {
             revert CompliantRouter__OnlyForwarder();
@@ -258,6 +258,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         if (isCompliant) {
             bytes memory callData = abi.encodeWithSelector(ICompliantLogic.executeLogic.selector, user);
 
+            /// @review do we even need custom gasLimit here? should it be replaced with try-catch and no gas limit?
             (bool success, bytes memory err) = logic.call{gas: gasLimit}(callData);
 
             /// @dev if logic implementation reverts, complete tx with event indicating as such
