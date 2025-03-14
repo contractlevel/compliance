@@ -43,7 +43,6 @@ contract OnTokenTransferTest is BaseTest {
         assertEq(user, emittedUser);
         assertEq(address(logic), emittedLogic);
         assertEq(address(logic), pendingRequest.logic);
-        assertEq(user, pendingRequest.user);
     }
 
     function test_compliant_onTokenTransfer_revertsWhen_notLink() public {

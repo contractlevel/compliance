@@ -57,6 +57,15 @@ contract RequestKycStatusTest is BaseTest {
         assertEq(user, emittedUser);
         assertEq(address(logic), emittedLogic);
         assertEq(actualFee, expectedFee);
+
+        (, bytes memory retData) =
+            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", emittedRequestId));
+
+        CompliantRouter.PendingRequest memory pendingRequest = abi.decode(retData, (CompliantRouter.PendingRequest));
+        bool isPending = pendingRequest.isPending;
+
+        assertTrue(isPending);
+        assertEq(address(logic), pendingRequest.logic);
     }
 
     function test_compliant_requestKycStatus_revertsWhen_userPendingRequest() public {

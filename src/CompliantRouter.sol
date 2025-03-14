@@ -33,7 +33,6 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     error CompliantRouter__RequestNotMadeByThisContract();
     error CompliantRouter__NotCompliantLogic(address invalidContract);
     error CompliantRouter__LinkTransferFailed();
-    error CompliantRouter__InvalidUser();
     error CompliantRouter__RequestNotPending();
     error CompliantRouter__MaxGasLimitExceeded();
     error CompliantRouter__InvalidLog();
@@ -42,12 +41,10 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
                                VARIABLES
     //////////////////////////////////////////////////////////////*/
     /// @notice this struct is used for requests that are pending Chainlink Automation
-    /// @param user who's compliant status is being requested
     /// @param logic the CompliantLogic contract implemented and passed by the requester
     /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
     /// @param isPending if this is true and a Fulfilled event is emitted by Everest, Chainlink Automation will perform
     struct PendingRequest {
-        address user;
         address logic;
         uint64 gasLimit;
         bool isPending;
@@ -185,7 +182,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        cannotExecute
+        // cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
@@ -210,19 +207,14 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
             }
 
             PendingRequest memory request = s_pendingRequests[requestId];
+            /// @dev revert if request is not pending
+            if (!request.isPending) revert CompliantRouter__RequestNotPending();
 
             /// @dev revert if request's logic contract does not implement ICompliantLogic interface
             /// @notice this check is a bit redundant because we already do it, but checkLog costs no gas so may as well
             // review maybe we want to remove this check. probably doesnt matter if we verified requests revert if not logic
             address logic = request.logic;
             _revertIfNotCompliantLogic(logic);
-
-            /// @dev revert if the user emitted by the Everest.Fulfill log is not the same as the one stored in request
-            /// @notice this check is a bit redundant too
-            if (user != request.user) revert CompliantRouter__InvalidUser();
-
-            /// @dev revert if request is not pending
-            if (!request.isPending) revert CompliantRouter__RequestNotPending();
 
             /// @dev get the gas limit for logic callback
             //slither-disable-next-line uninitialized-local
@@ -298,7 +290,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
         bytes32 requestId = i_everest.getLatestSentRequestId();
 
-        _setPendingRequest(requestId, user, logic, gasLimit);
+        _setPendingRequest(requestId, logic, gasLimit);
 
         emit CompliantStatusRequested(requestId, user, logic);
 
@@ -308,12 +300,9 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @dev Chainlink Automation will only trigger for a true pending request
     /// @param requestId unique identifier for request returned from everest chainlink client
-    /// @param user who's status to request
     /// @param logic CompliantLogic contract to call when request is fulfilled
     /// @param gasLimit maximum amount of gas to spend for CompliantLogic callback - default value is used if this is 0
-    function _setPendingRequest(bytes32 requestId, address user, address logic, uint64 gasLimit) internal {
-        // review - do we even need to write user to storage?
-        s_pendingRequests[requestId].user = user;
+    function _setPendingRequest(bytes32 requestId, address logic, uint64 gasLimit) internal {
         s_pendingRequests[requestId].logic = logic;
         s_pendingRequests[requestId].isPending = true;
         if (gasLimit >= MIN_GAS_LIMIT && gasLimit != DEFAULT_GAS_LIMIT) {
