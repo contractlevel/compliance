@@ -222,6 +222,8 @@ invariant pendingRequest_gasLimit_valid(bytes32 requestId)
     (getPendingRequest(requestId).gasLimit >= getMinGasLimit() && 
      getPendingRequest(requestId).gasLimit <= getMaxGasLimit());
 
+// @review - these next two invariants are a bit overkill and can probably be safely removed
+// because the 3rd invariant covers the same thing
 /// @notice logic address must implement expected interface
 invariant pendingRequest_logic_valid_pending(bytes32 requestId)
     getPendingRequest(requestId).isPending => getIsCompliantLogic(getPendingRequest(requestId).logic);
@@ -229,6 +231,11 @@ invariant pendingRequest_logic_valid_pending(bytes32 requestId)
 /// @notice logic address must implement expected interface
 invariant logic_address_compliant(bytes32 requestId)
     getPendingRequest(requestId).logic != 0 => getIsCompliantLogic(getPendingRequest(requestId).logic);
+
+/// @notice logic address must implement expected interface
+invariant logic_storage(bytes32 requestId)
+    getPendingRequest(requestId).logic == 0 ||
+    getIsCompliantLogic(getPendingRequest(requestId).logic);
 
 /// @notice non-compliant calls should never happen
 invariant no_nonCompliant_calls()
