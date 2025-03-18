@@ -75,12 +75,12 @@ contract HelperConfig is Script {
     function getEthSepoliaConfig() public pure returns (NetworkConfig memory) {
         return NetworkConfig({
             everest: address(0), // deployed mock
-            link: 0x779877a7b0d9e8603169ddbd7836e478b4624789,
+            link: 0x779877A7B0D9E8603169DdbD7836e478b4624789,
             linkUsdFeed: 0xc59E3633BAAC79493d908e63626716e204A45EdF,
             registry: 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad,
             registrar: 0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976,
             forwarder: address(0)
-        })
+        });
     }
 
     function getArbSepoliaConfig() public pure returns (NetworkConfig memory) {
@@ -91,7 +91,7 @@ contract HelperConfig is Script {
             registry: 0x8194399B3f11fcA2E8cCEfc4c9A658c61B8Bf412,
             registrar: 0x881918E24290084409DaA91979A30e6f0dB52eBe,
             forwarder: address(0)
-        })
+        });
     }
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
