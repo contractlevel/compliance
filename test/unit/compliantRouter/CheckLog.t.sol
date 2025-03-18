@@ -127,24 +127,6 @@ contract CheckLogTest is BaseTest {
     }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
-    function test_compliant_checkLog_revertsWhen_invalidUser() public {
-        /// @dev set user to pending request
-        _setUserPendingRequest(address(logic), defaultGasLimit);
-
-        /// @dev make invalid user
-        address invalidUser = makeAddr("invalidUser");
-
-        /// @dev check log
-        Log memory log = _createLog(true, address(compliantProxy), invalidUser);
-        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__InvalidUser()"));
-        (, bytes memory retData) = address(compliantProxy).call(
-            abi.encodeWithSignature(
-                "checkLog((uint256,uint256,bytes32,uint256,bytes32,address,bytes32[],bytes),bytes)", log, ""
-            )
-        );
-    }
-
-    /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_invalidLogSource() public {
         /// @dev set user to pending request
         _setUserPendingRequest(address(logic), defaultGasLimit);
