@@ -141,3 +141,4 @@ Each significant iteration of this project has been archived in its own branch.
 - **2025-01-23** - Framework separated into Router and Logic
 - **2025-02-22** - Gas limit on Logic callback
 - **2025-02-23** - Remove non-compliant callback
+- **2025-03-18** - Remove user sstore
