@@ -38,6 +38,10 @@ contract HelperConfig is Script {
             activeNetworkConfig = getPolygonConfig();
         } else if (block.chainid == 1) {
             activeNetworkConfig = getEthMainnetConfig();
+        } else if (block.chainid == 421614) {
+            activeNetworkConfig = getArbSepoliaConfig();
+        } else if (block.chainid == 11155111) {
+            activeNetworkConfig = getEthSepoliaConfig();
         } else {
             activeNetworkConfig = getOrCreateAnvilEthConfig();
         }
@@ -66,6 +70,28 @@ contract HelperConfig is Script {
             registrar: 0x6B0B234fB2f380309D47A7E9391E29E9a179395a,
             forwarder: address(0)
         });
+    }
+
+    function getEthSepoliaConfig() public pure returns (NetworkConfig memory) {
+        return NetworkConfig({
+            everest: address(0), // deployed mock
+            link: 0x779877a7b0d9e8603169ddbd7836e478b4624789,
+            linkUsdFeed: 0xc59E3633BAAC79493d908e63626716e204A45EdF,
+            registry: 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad,
+            registrar: 0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976,
+            forwarder: address(0)
+        })
+    }
+
+    function getArbSepoliaConfig() public pure returns (NetworkConfig memory) {
+        return NetworkConfig({
+            everest: address(0), // deployed mock
+            link: 0xb1D4538B4571d411F07960EF2838Ce337FE1E80E,
+            linkUsdFeed: 0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298,
+            registry: 0x8194399B3f11fcA2E8cCEfc4c9A658c61B8Bf412,
+            registrar: 0x881918E24290084409DaA91979A30e6f0dB52eBe,
+            forwarder: address(0)
+        })
     }
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
