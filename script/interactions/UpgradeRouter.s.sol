@@ -15,7 +15,7 @@ contract UpgradeRouter is Script {
 
         vm.startBroadcast();
 
-        /// @dev upgradeToAndCall - set CompliantRouter to new implementation and initialize deployer to owner
+        /// @dev upgradeToAndCall - set CompliantRouter to new implementation and initialize msg.sender to owner
         bytes memory initializeData = abi.encodeWithSignature("initialize(address)", msg.sender);
         // bytes memory initializeData = "";
         ProxyAdmin(proxyAdmin).upgradeAndCall(ITransparentUpgradeableProxy(proxy), router, initializeData);
