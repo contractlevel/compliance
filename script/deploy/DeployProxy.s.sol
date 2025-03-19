@@ -3,8 +3,8 @@ pragma solidity 0.8.24;
 
 import {Vm} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
-import {CompliantProxy} from "../src/proxy/CompliantProxy.sol";
-import {InitialImplementation} from "../src/proxy/InitialImplementation.sol";
+import {CompliantProxy} from "../../src/proxy/CompliantProxy.sol";
+import {InitialImplementation} from "../../src/proxy/InitialImplementation.sol";
 
 contract DeployProxy is Script {
     function run() external returns (CompliantProxy, InitialImplementation, address proxyAdmin) {

@@ -2,8 +2,8 @@
 pragma solidity 0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {CompliantRouter} from "../src/CompliantRouter.sol";
-import {HelperConfig} from "./HelperConfig.s.sol";
+import {CompliantRouter} from "../../src/CompliantRouter.sol";
+import {HelperConfig} from "../HelperConfig.s.sol";
 
 contract DeployRouter is Script {
     function run() external returns (CompliantRouter, HelperConfig) {
