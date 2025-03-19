@@ -147,7 +147,7 @@ contract BaseTest is Test {
 
     /// @dev register Chainlink log trigger automation
     function _registerAutomation(address upkeepContract, address triggerContract) internal returns (uint256) {
-        uint256 linkAmount = 3e18;
+        uint256 linkAmount = 5e18;
         deal(link, deployer, linkAmount);
 
         LogTriggerConfig memory logTrigger = LogTriggerConfig({
