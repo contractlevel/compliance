@@ -74,7 +74,7 @@ contract HelperConfig is Script {
 
     function getEthSepoliaConfig() public pure returns (NetworkConfig memory) {
         return NetworkConfig({
-            everest: 0x88F32280155046f54c24fa0Dd0d176E4e0Ccad7A, // deployed mock
+            everest: 0xcc379063CEB8ecd6d3ec05AB821Ac9F8E028DAeC, // deployed mock
             link: 0x779877A7B0D9E8603169DdbD7836e478b4624789,
             linkUsdFeed: 0xc59E3633BAAC79493d908e63626716e204A45EdF,
             registry: 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad,

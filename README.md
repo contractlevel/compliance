@@ -19,6 +19,7 @@ This project is a framework for implementing regulatory compliance in smart cont
   - [Deployment](#deployment)
     - [CompliantRouter](#compliantrouter)
     - [CompliantLogic](#compliantlogic)
+    - [Eth Sepolia Deployment](#eth-sepolia-deployment)
   - [Additional Comments](#additional-comments)
   - [Disclaimer](#disclaimer)
   - [Archives](#archives)
@@ -49,7 +50,7 @@ The fee amount to pass for both options can be read from `CompliantRouter.getFee
 
 ## Compliant Restricted Functionality
 
-Once a request for the KYC status of an address has been fulfilled by the Everest Chainlink node, Chainlink Log Trigger Automation will be used to route the response to the user/client's `CompliantLogic` implementation. 
+Once a request for the KYC status of an address has been fulfilled by the Everest Chainlink node, Chainlink Log Trigger Automation will be used to route the response to the user/client's `CompliantLogic` implementation.
 
 `CompliantLogic` is an abstract contract. Users must inherit and override the internal `_executeLogic_()` function. If the `CompliantLogic` contract address passed to the `CompliantRouter` during requests does not implement the expected interface, the request will revert.
 
@@ -107,7 +108,8 @@ certoraRun ./certora/conf/Compliant.conf
 ## Deployment
 
 ### CompliantRouter
-*Deployed by contractlevel.com team*
+
+_Deployed by contractlevel.com team_
 
 This contract uses a `TransparentUpgradeableProxy` (`CompliantProxy`) to store Chainlink Automation `forwarder` and `upkeepId` as immutable, saving gas for the end user. These are the deployment steps to ensure this functionality and immutability of the `Compliant` contract:
 
@@ -119,9 +121,18 @@ This contract uses a `TransparentUpgradeableProxy` (`CompliantProxy`) to store C
 - renounceOwnership of CompliantProxy's `ProxyAdmin` Admin, ensuring the implementation cannot be changed again
 
 ### CompliantLogic
-*Deployed by user*
+
+_Deployed by user_
 
 Pass the `CompliantRouter` (`CompliantProxy`) address in the constructor.
+
+### Eth Sepolia Deployment
+
+[Proxy](https://sepolia.etherscan.io/address/0x921715E7b78d53f80ae0e5C7b086BCD4213A6AD2#readProxyContract)
+
+[Router](https://sepolia.etherscan.io/address/0xe4Ad034259932cE41AE05af4E1d6E9324Ecde8a0#code)
+
+[MockEverestConsumer](https://sepolia.etherscan.io/address/0xcc379063CEB8ecd6d3ec05AB821Ac9F8E028DAeC#code)
 
 ## Additional Comments
 
