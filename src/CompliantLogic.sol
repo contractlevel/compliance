@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import {ICompliantLogic} from "./interfaces/ICompliantLogic.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-/// @notice Base contract for compliant smart contracts - inherit and override _compliantLogic()
+/// @notice Base contract for compliant smart contracts - inherit and override _executeLogic()
 abstract contract CompliantLogic is ICompliantLogic, IERC165 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
