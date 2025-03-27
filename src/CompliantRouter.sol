@@ -189,16 +189,16 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
         bytes32 eventSignature = keccak256("Fulfilled(bytes32,address,address,uint8,uint40)");
 
         if (log.source == address(i_everest) && log.topics[0] == eventSignature) {
-            bytes32 requestId = log.topics[1];
-
             /// @dev revert if request wasn't made by this contract
-            address revealer = address(uint160(uint256(log.topics[2])));
+            address revealer = address(uint160(uint256(log.topics[1])));
             if (revealer != address(this)) {
                 revert CompliantRouter__RequestNotMadeByThisContract();
             }
 
-            (address user, IEverestConsumer.Status kycStatus,) =
-                abi.decode(log.data, (address, IEverestConsumer.Status, uint40));
+            address user = address(uint160(uint256(log.topics[2])));
+
+            (bytes32 requestId, IEverestConsumer.Status kycStatus,) =
+                abi.decode(log.data, (bytes32, IEverestConsumer.Status, uint40));
 
             //slither-disable-next-line uninitialized-local
             bool isCompliant;
