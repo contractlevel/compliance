@@ -808,6 +808,7 @@ rule checkLog_revertsWhen_invalidLogEvent() {
     assert lastReverted;
 }
 
+// @review fix this
 /// @notice checkLog should revert if the revealer address is not the Router/currentContract
 rule checkLog_revertsWhen_invalidRevealer() {
     env e;
@@ -828,6 +829,7 @@ rule checkLog_revertsWhen_invalidRevealer() {
     assert lastReverted;
 }
 
+// @review fix this
 /// @notice checkLog should revert if the request is not pending
 rule checkLog_revertsWhen_requestNotPending() {
     env e;

@@ -60,7 +60,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     // @review - check performGasLimit in Chainlink Automation and whether the max should change based on that
     uint64 internal constant MAX_GAS_LIMIT = 3_000_000;
     /// @dev default gas limit for CompliantLogic callback
-    uint64 internal constant DEFAULT_GAS_LIMIT = 200_000;
+    uint64 internal constant DEFAULT_GAS_LIMIT = 350_000;
     /// @dev min gas limit for CompliantLogic callback
     uint64 internal constant MIN_GAS_LIMIT = 50_000;
 
