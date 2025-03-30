@@ -7,7 +7,7 @@ import {LogicWrapperRevert} from "../../wrappers/LogicWrapperRevert.sol";
 contract PerformUpkeepTest is BaseTest {
     function test_compliant_performUpkeep_isCompliant() public {
         /// @dev set user to pending request
-        _setUserPendingRequest(address(logic), defaultGasLimit);
+        _setUserPendingRequest(address(logic));
 
         /// @dev make sure the incremented value hasnt been touched
         uint256 incrementBefore = logic.getIncrementedValue();
@@ -17,7 +17,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
-        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
+        bytes memory performData = abi.encode(requestId, user, address(logic), true);
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -64,7 +64,7 @@ contract PerformUpkeepTest is BaseTest {
 
     function test_compliant_performUpkeep_isNonCompliant() public {
         /// @dev set user to pending request
-        _setUserPendingRequest(address(logic), defaultGasLimit);
+        _setUserPendingRequest(address(logic));
 
         /// @dev make sure the incremented value hasnt been touched
         uint256 incrementBefore = logic.getIncrementedValue();
@@ -74,7 +74,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
-        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, false); // false for not compliant
+        bytes memory performData = abi.encode(requestId, user, address(logic), false); // false for not compliant
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -132,11 +132,11 @@ contract PerformUpkeepTest is BaseTest {
     function test_compliant_performUpkeep_handles_logicRevert() public {
         /// @dev set pending request with logic implementation that will revert
         LogicWrapperRevert logicRevert = new LogicWrapperRevert(address(compliantProxy));
-        _setUserPendingRequest(address(logicRevert), defaultGasLimit);
+        _setUserPendingRequest(address(logicRevert));
 
         /// @dev create performData
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
-        bytes memory performData = abi.encode(requestId, user, address(logicRevert), defaultGasLimit, true);
+        bytes memory performData = abi.encode(requestId, user, address(logicRevert), true);
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -174,6 +174,7 @@ contract PerformUpkeepTest is BaseTest {
         (, bytes memory retData) =
             address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
         CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
+        // @review on Sepolia testnet, reverting cases emit CompliantLogicExecutionFailed but don't change state
         assertFalse(request.isPending);
     }
 
@@ -182,11 +183,11 @@ contract PerformUpkeepTest is BaseTest {
         uint64 gasLimit = 45500; // 56575 58842 44421 59421
 
         /// @dev set user to pending request
-        _setUserPendingRequest(address(logic), gasLimit);
+        _setUserPendingRequest(address(logic));
 
         /// @dev create performData
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
-        bytes memory performData = abi.encode(requestId, user, address(logic), gasLimit, true);
+        bytes memory performData = abi.encode(requestId, user, address(logic), true);
 
         /// @dev Measure gas before function call
         uint256 gasBefore = gasleft();

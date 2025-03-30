@@ -99,9 +99,6 @@ contract Invariant is StdInvariant, BaseTest {
         logic = new LogicWrapper(address(compliantProxy));
         logicRevert = new LogicWrapperRevert(address(compliantProxy));
 
-        /// @dev set default gas limit
-        defaultGasLimit = compliantRouter.getDefaultGasLimit();
-
         //-----------------------------------------------------------------------------------------------
 
         /// @dev deploy handler
@@ -244,7 +241,7 @@ contract Invariant is StdInvariant, BaseTest {
     function checkForwarderCanCallPerformUpkeep(address user) external {
         bytes32 requestId = keccak256(abi.encodePacked(everest, handler.g_requestsMade()));
 
-        bytes memory performData = abi.encode(requestId, user, address(logic), defaultGasLimit, true);
+        bytes memory performData = abi.encode(requestId, user, address(logic), true);
 
         vm.prank(forwarder);
         (bool success,) = address(compliantProxy).call(abi.encodeWithSignature("performUpkeep(bytes)", performData));
@@ -416,29 +413,6 @@ contract Invariant is StdInvariant, BaseTest {
 
     //  NOTE: THIS WOULD REQUIRE LOCAL CHAINLINK AUTOMATION SIMULATOR
     //  performUpkeep should only process requests where checkLog indicates that upkeepNeeded is true.
-
-    // Gas Limit:
-    /// @dev Less than minimum or default gas limit should not write to storage
-    function invariant_gasLimit_noStorageWrite() public {
-        handler.forEachRequestId(this.checkGasLimitStorage);
-    }
-
-    function checkGasLimitStorage(bytes32 requestId) external {
-        (, bytes memory retData) =
-            address(compliantProxy).call(abi.encodeWithSignature("getPendingRequest(bytes32)", requestId));
-        CompliantRouter.PendingRequest memory request = abi.decode(retData, (CompliantRouter.PendingRequest));
-
-        if (
-            handler.g_requestIdToGasLimit(requestId) == defaultGasLimit
-                || handler.g_requestIdToGasLimit(requestId) < compliantRouter.getMinGasLimit()
-        ) {
-            assertEq(
-                request.gasLimit,
-                0,
-                "Invariant violated: Less than minimum or default gas limit should not write to storage."
-            );
-        }
-    }
 
     // we want to assert that our performUpkeep is always a success when the logic implementation reverts
 }

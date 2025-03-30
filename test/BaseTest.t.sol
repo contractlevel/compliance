@@ -46,8 +46,6 @@ contract BaseTest is Test {
 
     uint256 internal ethMainnetFork;
 
-    uint64 internal defaultGasLimit;
-
     uint256 internal requestNonce;
 
     /*//////////////////////////////////////////////////////////////
@@ -108,9 +106,6 @@ contract BaseTest is Test {
 
         /// @dev deploy CompliantLogic implementation
         logic = new LogicWrapper(address(compliantProxy));
-
-        /// @dev set default gas limit
-        defaultGasLimit = compliantRouter.getDefaultGasLimit();
     }
 
     /// @notice Empty test function to ignore file in coverage report
@@ -127,11 +122,11 @@ contract BaseTest is Test {
     }
 
     /// @dev set the user to pending request
-    function _setUserPendingRequest(address logicContract, uint64 gasLimit) internal {
+    function _setUserPendingRequest(address logicContract) internal {
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
 
         uint256 amount = compliantRouter.getFee();
-        bytes memory data = abi.encode(user, logicContract, gasLimit);
+        bytes memory data = abi.encode(user, logicContract);
         vm.prank(user);
         LinkTokenInterface(link).transferAndCall(address(compliantProxy), amount, data);
 

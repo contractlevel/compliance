@@ -74,7 +74,7 @@ contract RequestKycStatusTest is BaseTest {
         LinkTokenInterface(link).approve(address(compliantProxy), approvalAmount);
 
         (bool success,) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), defaultGasLimit)
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic))
         );
         require(success, "delegate call to requestKycStatus failed");
 
@@ -90,7 +90,7 @@ contract RequestKycStatusTest is BaseTest {
         vm.startPrank(user);
         LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
         vm.expectRevert(abi.encodeWithSignature("CompliantRouter__OnlyProxy()"));
-        compliantRouter.requestKycStatus(user, address(logic), 0); // 0 for DEFAULT_GAS_LIMIT
+        compliantRouter.requestKycStatus(user, address(logic));
         vm.stopPrank();
     }
 
@@ -102,7 +102,7 @@ contract RequestKycStatusTest is BaseTest {
         LinkTokenInterface(link).approve(address(compliantRouter), approvalAmount);
         vm.expectRevert(abi.encodeWithSignature("CompliantRouter__NotCompliantLogic(address)", nonLogic));
         (bool success,) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, nonLogic, defaultGasLimit)
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, nonLogic)
         );
         vm.stopPrank();
     }
@@ -115,7 +115,7 @@ contract RequestKycStatusTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSignature("CompliantRouter__LinkTransferFailed()"));
         (bool success,) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), defaultGasLimit)
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic))
         );
         vm.stopPrank();
     }
@@ -141,19 +141,7 @@ contract RequestKycStatusTest is BaseTest {
         LinkTokenInterface(link).approve(address(compliantProxy), compliantRouter.getFee());
         vm.expectRevert(abi.encodeWithSignature("CompliantRouter__LinkTransferFailed()"));
         (bool success,) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), defaultGasLimit)
-        );
-        vm.stopPrank();
-    }
-
-    function test_compliant_requestKycStatus_revertsWhen_maxGasLimitExceeded() public {
-        uint64 gasLimit = compliantRouter.getMaxGasLimit() + 1;
-
-        vm.startPrank(user);
-        LinkTokenInterface(link).approve(address(compliantProxy), compliantRouter.getFee());
-        vm.expectRevert(abi.encodeWithSignature("CompliantRouter__MaxGasLimitExceeded()"));
-        (bool success,) = address(compliantProxy).call(
-            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic), gasLimit)
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, address(logic))
         );
         vm.stopPrank();
     }
@@ -169,9 +157,7 @@ contract RequestKycStatusTest is BaseTest {
         LinkTokenInterface(link).approve(address(compliantProxy), linkApprovalAmount);
         vm.prank(caller);
         (, bytes memory retData) = address(compliantProxy).call(
-            abi.encodeWithSignature(
-                "requestKycStatus(address,address,uint64)", requestedAddress, logic, defaultGasLimit
-            )
+            abi.encodeWithSignature("requestKycStatus(address,address,uint64)", requestedAddress, logic)
         );
         uint256 actualFee = abi.decode(retData, (uint256));
 

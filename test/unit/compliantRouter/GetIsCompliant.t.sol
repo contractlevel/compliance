@@ -14,7 +14,7 @@ contract GetIsCompliantTest is BaseTest {
         assertTrue(isCompliant);
     }
 
-    function test_compliant_getIsCompliantLogic() public {
+    function test_compliant_getIsCompliantLogic() public view {
         address nonLogic = address(compliantRouter);
 
         assertTrue(compliantRouter.getIsCompliantLogic(address(logic)));
