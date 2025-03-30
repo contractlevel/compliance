@@ -218,6 +218,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
             /// @dev get the gas limit for logic callback
             //slither-disable-next-line uninitialized-local
+            // uint64 gasLimit = MAX_GAS_LIMIT;
             uint64 gasLimit;
             if (request.gasLimit == 0) gasLimit = DEFAULT_GAS_LIMIT;
             else gasLimit = request.gasLimit;
