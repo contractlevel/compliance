@@ -195,7 +195,7 @@ contract Handler is Test {
             LinkTokenInterface(compliantRouter.getLink()).approve(address(compliantProxy), amount);
             /// @dev requestKycStatus
             (bool success,) = address(compliantProxy).call(
-                abi.encodeWithSignature("requestKycStatus(address,address,uint64)", user, logicImplementation)
+                abi.encodeWithSignature("requestKycStatus(address,address)", user, logicImplementation)
             );
             require(success, "delegate call in handler to requestKycStatus() failed");
             vm.stopPrank();

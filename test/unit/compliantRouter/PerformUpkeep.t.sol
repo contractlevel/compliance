@@ -136,7 +136,7 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev create performData
         bytes32 requestId = keccak256(abi.encodePacked(everest, everest.getNonce()));
-        bytes memory performData = abi.encode(requestId, user, address(logicRevert), true);
+        bytes memory performData = abi.encode(requestId, user, address(logicRevert), true); // true for isCompliant
 
         /// @dev call performUpkeep
         vm.recordLogs();
@@ -146,11 +146,10 @@ contract PerformUpkeepTest is BaseTest {
 
         /// @dev assert CompliantLogicExecutionFailed event emitted with correct params
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 fulfilledEventSignature = keccak256("CompliantLogicExecutionFailed(bytes32,address,address,bool,bytes)");
+        bytes32 fulfilledEventSignature = keccak256("CompliantLogicExecutionFailed(bytes32,address,address,bytes)");
         bytes32 emittedRequestId;
         address emittedUser;
         address emittedLogic;
-        bool emittedBool;
         bytes memory emittedErr;
 
         for (uint256 i = 0; i < logs.length; i++) {
@@ -158,7 +157,7 @@ contract PerformUpkeepTest is BaseTest {
                 emittedRequestId = logs[i].topics[1];
                 emittedUser = address(uint160(uint256(logs[i].topics[2])));
                 emittedLogic = address(uint160(uint256(logs[i].topics[3])));
-                (emittedBool, emittedErr) = abi.decode(logs[i].data, (bool, bytes));
+                (emittedErr) = abi.decode(logs[i].data, (bytes));
             }
         }
 
@@ -167,7 +166,6 @@ contract PerformUpkeepTest is BaseTest {
         assertEq(requestId, emittedRequestId);
         assertEq(user, emittedUser);
         assertEq(address(logicRevert), emittedLogic);
-        assertTrue(emittedBool);
         assertEq(bytes4(emittedErr), expectedErrorSelector);
 
         /// @dev assert request is no longer pending

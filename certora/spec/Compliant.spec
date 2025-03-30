@@ -61,7 +61,7 @@ methods {
 /// @notice external functions that change state
 definition canChangeState(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,address,uint64).selector ||
+	f.selector == sig:requestKycStatus(address,address).selector ||
     f.selector == sig:performUpkeep(bytes).selector ||
     f.selector == sig:withdrawFees().selector ||
     f.selector == sig:initialize(address).selector;
@@ -69,7 +69,7 @@ definition canChangeState(method f) returns bool =
 /// @notice external functions that can be called to make request
 definition canRequestStatus(method f) returns bool = 
 	f.selector == sig:onTokenTransfer(address,uint256,bytes).selector || 
-	f.selector == sig:requestKycStatus(address,address,uint64).selector;
+	f.selector == sig:requestKycStatus(address,address).selector;
 
 definition CompliantStatusRequestedEvent() returns bytes32 =
 // keccak256(abi.encodePacked("CompliantStatusRequested(bytes32,address,address)"))
