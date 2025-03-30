@@ -74,17 +74,18 @@ contract Harness is CompliantRouter {
         external view returns (Log memory)
     {
         bytes32[] memory topics = new bytes32[](3);
-        bytes32 addressToBytes32 = bytes32(uint256(uint160(revealer)));
+        bytes32 revealerAddressToBytes32 = bytes32(uint256(uint160(revealer)));
+        bytes32 revealeeAddressToBytes32 = bytes32(uint256(uint160(revealee)));
         topics[0] = eventSignature;
-        topics[1] = requestId;
-        topics[2] = addressToBytes32;
+        topics[1] = revealerAddressToBytes32;
+        topics[2] = revealeeAddressToBytes32;
 
         IEverestConsumer.Status status;
 
         if (isCompliant) status = IEverestConsumer.Status.KYCUser;
         else status = IEverestConsumer.Status.NotFound;
 
-        bytes memory data = abi.encode(revealee, status, block.timestamp);
+        bytes memory data = abi.encode(requestId, status, block.timestamp);
 
         Log memory log = Log({
             index: 0,
