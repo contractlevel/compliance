@@ -20,15 +20,15 @@ contract Harness is CompliantRouter {
                                 UTILITY
     //////////////////////////////////////////////////////////////*/
     /// @dev create data to pass to onTokenTransfer
-    function onTokenTransferData(address user, address logic, uint64 gasLimit) external returns (bytes memory) {
-        return abi.encode(user, logic, gasLimit);
+    function onTokenTransferData(address user, address logic) external returns (bytes memory) {
+        return abi.encode(user, logic);
     }
 
     /// @dev create performData to pass to performUpkeep
-    function performData(bytes32 requestId, address user, address logic, uint64 gasLimit, bool isCompliant) 
+    function performData(bytes32 requestId, address user, address logic, bool isCompliant) 
         external returns (bytes memory) 
     {
-        return abi.encode(requestId, user, logic, gasLimit, isCompliant);
+        return abi.encode(requestId, user, logic, isCompliant);
     }
 
     /// @dev predict requestId

@@ -169,7 +169,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
     function checkLog(Log calldata log, bytes memory)
         external
         view
-        // cannotExecute
+        cannotExecute
         onlyProxy
         returns (bool upkeepNeeded, bytes memory performData)
     {
@@ -215,7 +215,7 @@ contract CompliantRouter is ILogAutomation, AutomationBase, OwnableUpgradeable, 
 
     /// @notice called by Chainlink Automation forwarder when the request is fulfilled
     /// @param performData encoded bytes contains:
-    /// bytes32 requestId, address user, address logic, uint64 gasLimit and bool isCompliant
+    /// bytes32 requestId, address user, address logic and bool isCompliant
     function performUpkeep(bytes calldata performData) external onlyProxy {
         if (msg.sender != address(i_forwarder)) {
             revert CompliantRouter__OnlyForwarder();

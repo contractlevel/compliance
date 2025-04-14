@@ -12,11 +12,11 @@ contract CheckLogTest is BaseTest {
                                  TESTS
     //////////////////////////////////////////////////////////////*/
     /// @notice this test should be commented out if the cannotExecute modifier is removed from checkLog
-    // function test_compliant_checkLog_revertsWhen_called() public {
-    //     Log memory log = _createLog(true, address(compliantRouter), user);
-    //     vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
-    //     compliantRouter.checkLog(log, "");
-    // }
+    function test_compliant_checkLog_revertsWhen_called() public {
+        Log memory log = _createLog(true, address(compliantRouter), user);
+        vm.expectRevert(abi.encodeWithSignature("OnlySimulatedBackend()"));
+        compliantRouter.checkLog(log, "");
+    }
 
     /// @notice this test will fail unless the cannotExecute modifier is removed from checkLog
     function test_compliant_checkLog_revertsWhen_notProxy() public {
